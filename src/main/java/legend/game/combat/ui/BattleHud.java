@@ -1077,6 +1077,7 @@ public class BattleHud {
       digit.flags_00 = 0x8000;
       digit.x_0e = displayPosX;
       digit.y_10 = 0;
+      digit.lastY_10 = 0;
 
       if(clutCol == 2) {
         digit.flags_00 = 0;
@@ -1116,31 +1117,6 @@ public class BattleHud {
     for(final FloatingNumberC4 num : this.floatingNumbers_800c6b5c) {
       if((num.flags_02 & 0x8000) != 0) {
         if(num.state_00 != 0) {
-          if(num.bentIndex_04 != -1) {
-            final BattleEntity27c bent = SCRIPTS.getObject(num.bentIndex_04, BattleEntity27c.class);
-
-            final float x;
-            final float y;
-            final float z;
-            if(bent instanceof final MonsterBattleEntity monster) {
-              // Dunno why these are backwards
-              x = -monster.targetArrowPos_78.z * 100.0f;
-              y = -monster.targetArrowPos_78.y * 100.0f;
-              z = -monster.targetArrowPos_78.x * 100.0f;
-            } else {
-              //LAB_800f3a3c
-              x = 0;
-              y = -640;
-              z = 0;
-            }
-
-            //LAB_800f3a44
-            final Vector2f screenCoords = new Vector2f();
-            Transformations.toScreenspace(new Vector3f(x, y, z), bent.model_148.coord2_14, screenCoords);
-            num.x_1c = this.clampX(screenCoords.x + centreScreenX_1f8003dc) + num.xOffset;
-            num.y_20 = this.clampY(screenCoords.y + centreScreenY_1f8003de) + num.yOffset;
-          }
-
           //LAB_800f3ac8
           if(num.state_00 == 1) {
             //LAB_800f3b24
@@ -1161,6 +1137,7 @@ public class BattleHud {
 
               if((digit.flags_00 & 0x1) != 0) {
                 if((digit.flags_00 & 0x2) != 0) {
+                  digit.lastY_10 = digit.y_10;
                   if(digit._08 < 5) {
                     digit.y_10 += digit._08;
                     digit._08++;
@@ -1248,10 +1225,37 @@ public class BattleHud {
 
   @Method(0x800f3dbcL)
   public void drawFloatingNumbers() {
+    final float alpha = SCRIPTS.getInterpAlpha();
+
     //LAB_800f3e20
     for(final FloatingNumberC4 num : this.floatingNumbers_800c6b5c) {
       if((num.flags_02 & 0x8000) != 0) {
         if(num.state_00 != 0) {
+          if(num.bentIndex_04 != -1) {
+            final BattleEntity27c bent = SCRIPTS.getObject(num.bentIndex_04, BattleEntity27c.class);
+
+            final float x;
+            final float y;
+            final float z;
+            if(bent instanceof final MonsterBattleEntity monster) {
+              // Dunno why these are backwards
+              x = -monster.targetArrowPos_78.z * 100.0f;
+              y = -monster.targetArrowPos_78.y * 100.0f;
+              z = -monster.targetArrowPos_78.x * 100.0f;
+            } else {
+              //LAB_800f3a3c
+              x = 0;
+              y = -640;
+              z = 0;
+            }
+
+            //LAB_800f3a44
+            final Vector2f screenCoords = new Vector2f();
+            Transformations.toScreenspace(new Vector3f(x, y, z), bent.model_148.coord2_14, screenCoords);
+            num.x_1c = this.clampX(screenCoords.x + centreScreenX_1f8003dc);
+            num.y_20 = this.clampY(screenCoords.y + centreScreenY_1f8003de);
+          }
+
           //LAB_800f3e80
           for(int i = 0; i < num.digits_24.length; i++) {
             final FloatingNumberDigit20 digit = num.digits_24[i];
@@ -1262,7 +1266,8 @@ public class BattleHud {
 
             if((digit.flags_00 & 0x8000) != 0) {
               //LAB_800f3ec0
-                num.transforms.transfer.set(digit.x_0e + num.x_1c, digit.y_10 + num.y_20, 28.0f);
+                final float digitY = org.joml.Math.lerp(digit.lastY_10, digit.y_10, alpha);
+                num.transforms.transfer.set(digit.x_0e + num.x_1c, digitY + num.y_20, 28.0f);
                 final QueuedModelStandard model = RENDERER.queueOrthoModel(digit.obj, num.transforms, QueuedModelStandard.class)
                   .colour(num.colour);
 

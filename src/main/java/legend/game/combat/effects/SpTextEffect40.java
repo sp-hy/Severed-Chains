@@ -12,6 +12,7 @@ import org.joml.Vector3f;
 import java.util.Arrays;
 
 import static legend.core.GameEngine.GPU;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Scus94491BpeSegment.battleUiParts;
 
 public class SpTextEffect40 implements ScriptedObject {
@@ -25,6 +26,10 @@ public class SpTextEffect40 implements ScriptedObject {
   public int x_0c;
   /** .8 */
   public int y_10 = 30;
+  /** .8, previous 20 Hz tick */
+  public int lastX_0c;
+  /** .8, previous 20 Hz tick */
+  public int lastY_10 = 30;
 
   /** .8 */
   public int destX_1c;
@@ -67,6 +72,8 @@ public class SpTextEffect40 implements ScriptedObject {
     }
 
     //LAB_800d4090
+    this.lastX_0c = this.x_0c;
+    this.lastY_10 = this.y_10;
     this.ticks_04++;
     this.y_10 += this.stepY_30;
     this.stepY_30 += 0x200;
@@ -94,6 +101,13 @@ public class SpTextEffect40 implements ScriptedObject {
 
     charArray[0].x_00 = this.x_0c;
     charArray[0].y_04 = this.y_10;
+  }
+
+  public void renderSpTextEffect(final ScriptState<SpTextEffect40> state, final SpTextEffect40 effect) {
+    final float alpha = SCRIPTS.getInterpAlpha();
+    final int visualX = (int)Math.lerp(this.lastX_0c, this.x_0c, alpha);
+    final int visualY = (int)Math.lerp(this.lastY_10, this.y_10, alpha);
+    final SpTextEffectTrail10[] charArray = this.charArray_3c;
     int brightness = this.brightness_02;
     final int darkeningStep = (brightness & 0xff) >>> 3;
     final int packedClut = this._01 + 0x21 & 0xff;
@@ -104,10 +118,13 @@ public class SpTextEffect40 implements ScriptedObject {
     for(int i = 0; i < 8; i++) {
       brightness -= darkeningStep;
 
+      final int trailX = i == 0 ? visualX : charArray[i].x_00;
+      final int trailY = i == 0 ? visualY : charArray[i].y_04;
+
       if(i == 0 || charArray[i].x_00 != this.x_0c || charArray[i].y_04 != this.y_10) {
         //LAB_800d41d8
-        x = charArray[i].x_00 >> 8;
-        y = charArray[i].y_04 >> 8;
+        x = trailX >> 8;
+        y = trailY >> 8;
 
         if(this._01 != 0) {
           battleUiParts.queueBigNumber(10, x, y, packedClut, Translucency.B_PLUS_F, brightness, 1.0f, 1.0f);

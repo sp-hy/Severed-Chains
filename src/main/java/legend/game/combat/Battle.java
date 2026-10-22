@@ -5216,6 +5216,7 @@ public class Battle extends EngineState<Battle> {
       final ScriptState<AdditionNameTextEffect1c> state = SCRIPTS.allocateScriptState("AdditionNameTextEffect1c", additionStruct);
       state.loadScriptFile(doNothingScript_8004f650);
       state.setTicker((s, effect) -> additionStruct.tickAdditionNameEffect(s, this._800faa9d));
+      state.setRenderer(additionStruct::renderAdditionNameEffect);
       final String additionName = addition.getName();
 
       //LAB_800d3e5c
@@ -5239,6 +5240,7 @@ public class Battle extends EngineState<Battle> {
         charStruct.scrolling_00 = 1;
         charStruct.dupes_02 = 8;
         charStruct.position_04 = charPosition;
+        charStruct.lastPosition_04 = charPosition;
         charStruct.offsetY_06 = displayOffsetY;
         charStruct.offsetX_08 = displayOffsetX;
         charStruct.offsetY_0a = displayOffsetY;
@@ -5267,6 +5269,7 @@ public class Battle extends EngineState<Battle> {
       final ScriptState<SpTextEffect40> state = SCRIPTS.allocateScriptState("SpTextEffect40", s1);
       state.loadScriptFile(doNothingScript_8004f650);
       state.setTicker((s, effect) -> s1.tickSpTextEffect(s, this._800faa94));
+      state.setRenderer(s1::renderSpTextEffect);
 
       s1.value_08 = s2;
       s1.destX_1c = this._800faa90 << 8;
@@ -5321,6 +5324,7 @@ public class Battle extends EngineState<Battle> {
       final ScriptState<AdditionNameTextEffect1c> state = SCRIPTS.allocateScriptState("AdditionScriptData1c", s0);
       state.loadScriptFile(doNothingScript_8004f650);
       state.setTicker((s, effect) -> s0.tickAdditionNameEffect(s, this._800faa9d));
+      state.setRenderer(s0::renderAdditionNameEffect);
       s0.ptr_18 = new AdditionCharEffectData0c[] {new AdditionCharEffectData0c()};
       s0.positionMovement_0c = 40;
       s0.renderer_14 = s0::renderAdditionSpGain;
@@ -5330,6 +5334,7 @@ public class Battle extends EngineState<Battle> {
       struct.scrolling_00 = 1;
       struct.dupes_02 = 8;
       struct.position_04 = -160;
+      struct.lastPosition_04 = -160;
       struct.offsetY_06 = 96;
       struct.offsetX_08 = 144 - (String.valueOf(totalSp).length() + 4) * 8;
       struct.offsetY_0a = 96;
