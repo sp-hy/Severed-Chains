@@ -6,10 +6,12 @@ import legend.core.memory.types.TriConsumer;
 import legend.game.scripting.ScriptState;
 import legend.game.scripting.ScriptedObject;
 import legend.core.renderer.Translucency;
+import org.joml.Math;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import static legend.core.GameEngine.GPU;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Scus94491BpeSegment.battleUiParts;
 import static legend.game.combat.Battle.asciiTable_800fa788;
 
@@ -107,44 +109,56 @@ public class AdditionNameTextEffect1c implements ScriptedObject {
 
     if(unknown == 0) {
       state.deallocateWithChildren();
-    } else {
-      //LAB_800d3c10
-      //LAB_800d3c24
-      for(int charIdx = 0; charIdx < this.length_08; charIdx++) {
-        final AdditionCharEffectData0c charStruct = this.ptr_18[charIdx];
+      return;
+    }
 
-        if(charStruct.scrolling_00 != 0) {
-          charStruct.position_04 += this.positionMovement_0c;
+    //LAB_800d3c10
+    //LAB_800d3c24
+    for(int charIdx = 0; charIdx < this.length_08; charIdx++) {
+      final AdditionCharEffectData0c charStruct = this.ptr_18[charIdx];
+      charStruct.lastPosition_04 = charStruct.position_04;
 
-          if(charStruct.position_04 >= charStruct.offsetX_08) {
-            charStruct.position_04 = charStruct.offsetX_08;
-            charStruct.scrolling_00 = 0;
-          }
-        } else {
-          //LAB_800d3c70
-          if(charStruct.dupes_02 > 0) {
-            charStruct.dupes_02--;
-          }
+      if(charStruct.scrolling_00 != 0) {
+        charStruct.position_04 += this.positionMovement_0c;
+
+        if(charStruct.position_04 >= charStruct.offsetX_08) {
+          charStruct.position_04 = charStruct.offsetX_08;
+          charStruct.scrolling_00 = 0;
         }
-
-        //LAB_800d3c84
-        //LAB_800d3c88
-        this.renderer_14.accept(charStruct, 0x80, charIdx);
-        int currPosition = charStruct.position_04;
-        int u = charStruct.dupes_02 * 0x10;
-
-        //LAB_800d3cbc
-        for(int dupeNum = 0; dupeNum < charStruct.dupes_02 - 1; dupeNum++) {
-          u -= 16;
-          currPosition -= 10;
-          final int origCharPosition = charStruct.position_04;
-          charStruct.position_04 = currPosition;
-          this.renderer_14.accept(charStruct, u & 0xff, charIdx);
-          charStruct.position_04 = origCharPosition;
+      } else {
+        //LAB_800d3c70
+        if(charStruct.dupes_02 > 0) {
+          charStruct.dupes_02--;
         }
       }
     }
+  }
 
-    //LAB_800d3d1c
+  public void renderAdditionNameEffect(final ScriptState<AdditionNameTextEffect1c> state, final AdditionNameTextEffect1c effect) {
+    final float alpha = SCRIPTS.getInterpAlpha();
+
+    //LAB_800d3c84
+    //LAB_800d3c88
+    for(int charIdx = 0; charIdx < this.length_08; charIdx++) {
+      final AdditionCharEffectData0c charStruct = this.ptr_18[charIdx];
+      final int logicPosition = charStruct.position_04;
+      charStruct.position_04 = (int)Math.lerp(charStruct.lastPosition_04, logicPosition, alpha);
+
+      this.renderer_14.accept(charStruct, 0x80, charIdx);
+      int currPosition = charStruct.position_04;
+      int u = charStruct.dupes_02 * 0x10;
+
+      //LAB_800d3cbc
+      for(int dupeNum = 0; dupeNum < charStruct.dupes_02 - 1; dupeNum++) {
+        u -= 16;
+        currPosition -= 10;
+        final int origCharPosition = charStruct.position_04;
+        charStruct.position_04 = currPosition;
+        this.renderer_14.accept(charStruct, u & 0xff, charIdx);
+        charStruct.position_04 = origCharPosition;
+      }
+
+      charStruct.position_04 = logicPosition;
+    }
   }
 }

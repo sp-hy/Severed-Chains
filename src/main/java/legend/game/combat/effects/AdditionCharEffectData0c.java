@@ -7,6 +7,8 @@ public class AdditionCharEffectData0c {
   public int dupes_02;
   /** Character print timing, stored as a negative int **/
   public int position_04;
+  /** `position_04` from the previous 20 Hz tick, for display interpolation */
+  public int lastPosition_04;
   /** Offset from base y-coordinate **/
   public int offsetY_06;
   /** Offset from base x-coordinate **/

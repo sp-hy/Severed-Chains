@@ -9,5 +9,7 @@ public class FloatingNumberDigit20 {
   public int digit_0c;
   public int x_0e;
   public int y_10;
+  /** `y_10` from the previous 20 Hz tick, for display interpolation */
+  public int lastY_10;
   public Obj obj;
 }
