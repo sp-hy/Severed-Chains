@@ -27,6 +27,7 @@ public class AdditionNameTextEffect1c implements ScriptedObject {
   public int totalSp_10;
   public TriConsumer<AdditionCharEffectData0c, Integer, Integer> renderer_14;
   public AdditionCharEffectData0c[] ptr_18;
+  private boolean deallocatePending;
 
   @Override
   public Vector3f getPosition() {
@@ -108,7 +109,7 @@ public class AdditionNameTextEffect1c implements ScriptedObject {
     this.ticks_04++;
 
     if(unknown == 0) {
-      state.deallocateWithChildren();
+      this.deallocatePending = true;
       return;
     }
 
@@ -159,6 +160,10 @@ public class AdditionNameTextEffect1c implements ScriptedObject {
       }
 
       charStruct.position_04 = logicPosition;
+    }
+
+    if(this.deallocatePending) {
+      state.deallocateWithChildren();
     }
   }
 }

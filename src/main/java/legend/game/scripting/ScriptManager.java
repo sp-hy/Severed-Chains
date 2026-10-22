@@ -420,9 +420,10 @@ public class ScriptManager {
     //LAB_80017854
     for(int i = 0; i < this.scriptStatePtrArr_800bc1c0.length; i++) {
       final ScriptState<?> scriptState = this.scriptStatePtrArr_800bc1c0[i];
-      // hasExecuted - script has already had a chance to run some of its code, so we can start ticking/rendering
-      // isScriptFrame - some effects allocate other effects and expect them to tick/render once they finish (#1530)
-      if(scriptState != null && (scriptState.hasExecuted() || isScriptFrame)) {
+      // Render every display frame, including the frame a script is allocated, so
+      // short-lived HUD (addition names, SP text) does not flicker at 20 Hz.
+      // Tickers still wait for hasExecuted || isScriptFrame (#1530).
+      if(scriptState != null) {
         try {
           scriptState.render();
         } catch(final Throwable t) {
