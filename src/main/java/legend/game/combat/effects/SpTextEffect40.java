@@ -42,6 +42,7 @@ public class SpTextEffect40 implements ScriptedObject {
   public int stepY_30 = -0x800;
 
   public final SpTextEffectTrail10[] charArray_3c = new SpTextEffectTrail10[8];
+  private boolean deallocatePending;
 
   public SpTextEffect40() {
     Arrays.setAll(this.charArray_3c, i -> new SpTextEffectTrail10());
@@ -63,7 +64,7 @@ public class SpTextEffect40 implements ScriptedObject {
   public void tickSpTextEffect(final ScriptState<SpTextEffect40> state, final int unknown) {
     if(unknown == 0 && !this.movingY_00) {
       if(this.brightness_02 == 0) {
-        state.deallocateWithChildren();
+        this.deallocatePending = true;
         return;
       }
 
@@ -104,6 +105,11 @@ public class SpTextEffect40 implements ScriptedObject {
   }
 
   public void renderSpTextEffect(final ScriptState<SpTextEffect40> state, final SpTextEffect40 effect) {
+    if(this.deallocatePending) {
+      state.deallocateWithChildren();
+      return;
+    }
+
     final float alpha = SCRIPTS.getInterpAlpha();
     final int visualX = (int)Math.lerp(this.lastX_0c, this.x_0c, alpha);
     final int visualY = (int)Math.lerp(this.lastY_10, this.y_10, alpha);

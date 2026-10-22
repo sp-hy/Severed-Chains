@@ -123,6 +123,27 @@ public abstract class ListMenu {
     return true;
   };
 
+  public boolean isWaitingToClose() {
+    return this.menuState_00 == 9;
+  }
+
+  private void beginClose() {
+    this.menuState_00 = 9;
+    this.flags_02 &= ~(0x1 | 0x2);
+  }
+
+  public void closeNow() {
+    if(this.menuState_00 != 9) {
+      return;
+    }
+
+    this.lastPosition.lastListIndex_26 = this.listIndex_24;
+    this.lastPosition.lastListScroll_28 = this.listScroll_1e;
+    this.onClose();
+    this.delete();
+    this.onClose.run();
+  }
+
   private void initObjs() {
     if(this.menuObj == null) {
       final QuadBuilder builder = new QuadBuilder("Spell/item menu");
@@ -395,12 +416,12 @@ public abstract class ListMenu {
           //LAB_800f5488
           playMenuSound(2);
           this.selectionState_a0 = 1;
-          this.menuState_00 = 9;
+          this.beginClose();
         } else if(ret == 2) { // Instant confirm, no sound
           LOGGER.info(BATTLE, "Player selected index %d", this.listScroll_1e + this.listIndex_24);
           this.onUse(this.listScroll_1e + this.listIndex_24);
           this.selectionState_a0 = 1;
-          this.menuState_00 = 9;
+          this.beginClose();
         } else if(ret == -1) { // Pressed O
           LOGGER.info(BATTLE, "Player cancelled menu");
           //LAB_800f54b4
@@ -415,17 +436,13 @@ public abstract class ListMenu {
       // Close list
       case 8 -> {
         this.selectionState_a0 = -1;
-        this.menuState_00 = 9;
-        this.flags_02 &= ~(0x1 | 0x2);
+        this.beginClose();
       }
 
-      // Deallocate list
+      // Wait for the 20 Hz script to read targeting info before deallocating.
+      // hud.draw ticks this menu every display frame, so closing here can null
+      // listMenu before scriptGetItemOrSpellTargetingInfo runs.
       case 9 -> {
-        this.lastPosition.lastListIndex_26 = this.listIndex_24;
-        this.lastPosition.lastListScroll_28 = this.listScroll_1e;
-        this.onClose();
-        this.delete();
-        this.onClose.run();
       }
 
       default -> throw new RuntimeException("Invalid menu state " + this.menuState_00);

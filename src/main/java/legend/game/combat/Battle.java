@@ -98,6 +98,7 @@ import legend.game.combat.ui.BattleAction;
 import legend.game.combat.ui.BattleActionTickFlowControl;
 import legend.game.combat.ui.BattleHud;
 import legend.game.combat.ui.BattleMenuStruct58;
+import legend.game.combat.ui.ListMenu;
 import legend.game.inventory.Equipment;
 import legend.game.inventory.EquipmentAttackType;
 import legend.game.inventory.ItemStack;
@@ -521,6 +522,9 @@ public class Battle extends EngineState<Battle> {
   /** Next global is related to AdditionNameTextEffect1c */
   private int _800faa9d;
 
+  /** Last 20 Hz script's button-press HUD; replayed on in-between display frames. */
+  private final List<ButtonPressHudElement> buttonPressHudElements = new ArrayList<>();
+
   public static final ButtonPressHudMetrics06[] buttonPressHudMetrics_800faaa0 = {
     new ButtonPressHudMetrics06(0, 184, 96, 24, 16, 42),
     new ButtonPressHudMetrics06(0, 208, 96, 24, 16, 42),
@@ -703,12 +707,22 @@ public class Battle extends EngineState<Battle> {
   public void postScriptTick(final boolean scriptsTicked) {
     super.postScriptTick(scriptsTicked);
 
+    for(int i = 0; i < this.buttonPressHudElements.size(); i++) {
+      final ButtonPressHudElement element = this.buttonPressHudElements.get(i);
+      renderButtonPressHudElement1(element.type, element.x, element.y, element.translucency, element.brightness);
+    }
+
     // Latch pressed/repeat across display frames so 20 Hz script/addition ticks cannot miss a 60 Hz press
     if(scriptsTicked) {
       this.inputPressed = 0;
       this.inputRepeat = 0;
       this.latchedPressedActions.clear();
       this.camera_800c67f0.captureLogicPose();
+
+      final ListMenu listMenu = this.hud.listMenu_800c6b60;
+      if(listMenu != null && listMenu.isWaitingToClose()) {
+        listMenu.closeNow();
+      }
     }
   }
 
@@ -741,6 +755,10 @@ public class Battle extends EngineState<Battle> {
   @Method(0x800186a0L)
   public void tick() {
     super.tick();
+
+    if(SCRIPTS.willTick()) {
+      this.buttonPressHudElements.clear();
+    }
 
     if(battleLoaded_800bc94c) {
       this.checkIfCharacterAndMonsterModelsAreLoadedAndCacheLivingBents();
@@ -5352,7 +5370,7 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.IN, type = ScriptParam.Type.INT, name = "brightness", description = "The brightness")
   @Method(0x800d46d4L)
   public FlowControl scriptRenderButtonPressHudElement(final RunningScript<?> script) {
-    renderButtonPressHudElement1(script.params_20[0].get(), script.params_20[1].get(), script.params_20[2].get(), Translucency.of(script.params_20[3].get()), script.params_20[4].get());
+    this.buttonPressHudElements.add(new ButtonPressHudElement(script.params_20[0].get(), script.params_20[1].get(), script.params_20[2].get(), Translucency.of(script.params_20[3].get()), script.params_20[4].get()));
     return FlowControl.CONTINUE;
   }
 
@@ -8791,7 +8809,13 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.OUT, type = ScriptParam.Type.INT, name = "itemOrSpellId", description = "The item or spell registry ID")
   @Method(0x800f4600L)
   public FlowControl scriptGetItemOrSpellTargetingInfo(final RunningScript<?> script) {
-    this.hud.listMenu_800c6b60.getTargetingInfo(script);
+    final ListMenu listMenu = this.hud.listMenu_800c6b60;
+    if(listMenu == null) {
+      script.params_20[0].set(0);
+      return FlowControl.CONTINUE;
+    }
+
+    listMenu.getTargetingInfo(script);
 
     //LAB_800f4800
     //LAB_800f4804
@@ -9422,4 +9446,6 @@ public class Battle extends EngineState<Battle> {
       this.hud.currentAttackElements.add(icon);
     }
   }
+
+  private record ButtonPressHudElement(int type, int x, int y, Translucency translucency, int brightness) { }
 }
