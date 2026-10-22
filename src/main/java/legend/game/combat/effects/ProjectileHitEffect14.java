@@ -58,7 +58,47 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
+    final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
 
+    //LAB_800d01ec
+    for(int i = 0; i < this.count_00; i++) {
+      final ProjectileHitEffectInstance48 s4 = this.instances[i];
+
+      if(s4.used_00) {
+        if(s4.frames_44 == 0) {
+          s4.used_00 = false;
+          continue;
+        }
+
+        s4._40++;
+        s4.frames_44--;
+
+        //LAB_800d0220
+        s4.r_34 -= s4.fadeR_3a;
+        s4.g_36 -= s4.fadeG_3c;
+        s4.b_38 -= s4.fadeB_3e;
+
+        //LAB_800d0254
+        for(int s3 = 0; s3 < 2; s3++) {
+          final Vector3f s1 = s4._04[s3];
+          final Vector3f a1 = s4._24[s3];
+          s1.add(a1);
+          a1.y += 25.0f;
+
+          if(a1.x > 10.0f) {
+            a1.x -= 10.0f;
+          }
+
+          //LAB_800d0308
+          if(s1.y + manager.params_10.trans_04.y >= 0) {
+            s1.y = -manager.params_10.trans_04.y;
+            a1.y = -a1.y;
+          }
+
+          //LAB_800d033c
+        }
+      }
+    }
   }
 
   @Override
@@ -84,36 +124,11 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
       final ProjectileHitEffectInstance48 s4 = this.instances[i];
 
       if(s4.used_00) {
-        s4._40++;
-        s4.frames_44--;
-
-        if(s4.frames_44 == 0) {
-          s4.used_00 = false;
-        }
-
-        //LAB_800d0220
-        s4.r_34 -= s4.fadeR_3a;
-        s4.g_36 -= s4.fadeG_3c;
-        s4.b_38 -= s4.fadeB_3e;
-
         //LAB_800d0254
         final Vector2f[] screenVert = {new Vector2f(), new Vector2f()};
         for(int s3 = 0; s3 < 2; s3++) {
           final Vector3f s1 = s4._04[s3];
-          final Vector3f a1 = s4._24[s3];
           a0 = FUN_800cfb14(manager, s1, screenVert[s3]);
-          s1.add(a1);
-          a1.y += 25.0f;
-
-          if(a1.x > 10.0f) {
-            a1.x -= 10.0f;
-          }
-
-          //LAB_800d0308
-          if(s1.y + manager.params_10.trans_04.y >= 0) {
-            s1.y = -manager.params_10.trans_04.y;
-            a1.y = -a1.y;
-          }
 
           //LAB_800d033c
         }

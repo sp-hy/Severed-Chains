@@ -29,6 +29,7 @@ import java.util.function.Function;
 
 import static legend.core.GameEngine.SCRIPTS;
 import static legend.core.IoHelper.intsToBytes;
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.scripting.ScriptState.FLAG_1_0000;
 import static legend.game.scripting.ScriptState.FLAG_DESTRUCTOR_NOT_SET;
 import static legend.game.scripting.ScriptState.FLAG_FILE_NOT_SET;
@@ -222,6 +223,15 @@ public class ScriptManager {
     this.framesPerTick = ticks;
   }
 
+  /** 0 on a logic/script frame, approaching 1 across the in-between display frames. */
+  public float getInterpAlpha() {
+    if(this.framesPerTick <= 1) {
+      return 1.0f;
+    }
+
+    return this.currentTicks / (float)this.framesPerTick;
+  }
+
   /** Stops the script engine (will not render) */
   public void stop() {
     this.stopped = true;
@@ -364,6 +374,10 @@ public class ScriptManager {
 
   private void executeScriptTickers(final boolean isScriptFrame) {
     if(this.paused || this.stopped) {
+      return;
+    }
+
+    if(!isScriptFrame && currentEngineState_8004dd04 != null && currentEngineState_8004dd04.tickersOnlyOnScriptFrames()) {
       return;
     }
 

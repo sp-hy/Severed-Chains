@@ -35,16 +35,14 @@ public class ScreenDistortionEffectData08 implements Effect<EffectManagerParams.
     this.type = type;
   }
 
-  /** Ticker and renderer are swapped */
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-    this.screenDistortionEffectRenderers_80119fd4[this.type].accept(state);
+    this.screenDistortionEffectTickers_80119fe0[this.type].accept(state);
   }
 
-  /** Ticker and renderer are swapped */
   @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-    this.screenDistortionEffectTickers_80119fe0[this.type].accept(state);
+    this.screenDistortionEffectRenderers_80119fd4[this.type].accept(state);
   }
 
   @Override
