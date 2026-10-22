@@ -302,7 +302,10 @@ public class LmbAnimationEffect5c implements Effect<EffectManagerParams.AnimType
     final EffectManagerData6c<EffectManagerParams.AnimType> manager = state.innerStruct_00;
     final int flags = manager.params_10.flags_00;
     if(flags >= 0) { // No errors
-      int tickFip12 = Math.max(0, manager.params_10.ticks_24) % (this.keyframeCount_08 * 2) << 12;
+      final int tickMultiplier = Math.max(1, manager.battle.tickMultiplier());
+      final int displayTicks = manager.battle.animationDisplayTicks(Math.max(0, manager.params_10.ticks_24));
+      int tickFip12 = displayTicks % (this.keyframeCount_08 * 2 * tickMultiplier) << 12;
+      tickFip12 /= tickMultiplier;
       tmdGp0Tpage_1f8003ec = flags >>> 23 & 0x60; // tpage
       if((manager.params_10.flags_00 & 0x40) == 0) {
         FUN_800e61e4((manager.params_10.colour_1c.x << 5) / (float)0x1000, (manager.params_10.colour_1c.y << 5) / (float)0x1000, (manager.params_10.colour_1c.z << 5) / (float)0x1000);

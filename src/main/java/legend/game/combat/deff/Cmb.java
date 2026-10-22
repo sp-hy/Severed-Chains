@@ -12,6 +12,8 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
+import static legend.game.EngineStates.currentEngineState_8004dd04;
+
 public class Cmb extends TmdAnimationFile {
   public static final int MAGIC = 0x2042_4d43;
 
@@ -85,33 +87,25 @@ public class Cmb extends TmdAnimationFile {
     // Note: these two variables _should_ be the same
     final int modelPartCount = this.modelPartCount_0c;
     final int count = Math.min(model.modelParts_00.length, model.partCount_98);
+    final int tickMultiplier = currentEngineState_8004dd04 != null ? Math.max(1, currentEngineState_8004dd04.tickMultiplier()) : 1;
+    final int framesPerKeyframe = Math.max(1, (model.disableInterpolation_a2 ? 1 : 2) * tickMultiplier);
+    final int keyframeCount = Math.max(1, model.totalFrames_9a / 2);
+    final int totalDisplayFrames = keyframeCount * framesPerKeyframe;
 
     //LAB_800dddc4
     int frameIndex;
     final int a1_0;
+    final int subFrame;
     final int isInterpolationFrame;
-    if(model.disableInterpolation_a2) {
-      isInterpolationFrame = 0;
-      a1_0 = (animationTicks * 2) % model.totalFrames_9a / 2;
-      frameIndex = (cmbAnim.animationTicks_00 * 2) % model.totalFrames_9a / 2;
-      model.remainingFrames_9e = model.totalFrames_9a / 2 - a1_0 - 1;
-    } else {
-      //LAB_800dde1c
-      // This modulo has to be unsigned due to a bug causing the number of ticks
-      // to go negative. This matches the retail behaviour (it uses divu).
-      final int frame = (int)((animationTicks & 0xffff_ffffL) % model.totalFrames_9a);
-      isInterpolationFrame = animationTicks & 0x1;
-      a1_0 = frame >>> 1;
-      frameIndex = cmbAnim.animationTicks_00 % model.totalFrames_9a >> 1;
-      model.remainingFrames_9e = model.totalFrames_9a - frame - 1;
-
-      // This is another retail bug - it's possible for the frame index to go negative
-      if(frameIndex < 0) {
-        frameIndex = 0;
-      }
-    }
-
-    model.subFrameIndex = 0;
+    // This modulo has to be unsigned due to a bug causing the number of ticks
+    // to go negative. This matches the retail behaviour (it uses divu).
+    final int frame = (int)((animationTicks & 0xffff_ffffL) % totalDisplayFrames);
+    a1_0 = frame / framesPerKeyframe;
+    subFrame = frame % framesPerKeyframe;
+    isInterpolationFrame = !model.disableInterpolation_a2 && subFrame != 0 ? 1 : 0;
+    frameIndex = Math.max(0, cmbAnim.animationTicks_00) / framesPerKeyframe % keyframeCount;
+    model.remainingFrames_9e = totalDisplayFrames - frame - 1;
+    model.subFrameIndex = subFrame;
 
     //LAB_800dde60
     if(frameIndex > a1_0) {
@@ -146,10 +140,11 @@ public class Cmb extends TmdAnimationFile {
 
     //LAB_800ddfe4
     //LAB_800de158
-    if(isInterpolationFrame != 0 && model.ub_a3 == 0 && a1_0 != (model.totalFrames_9a >> 1) - 1) { // Interpolation frame
+    if(isInterpolationFrame != 0 && model.ub_a3 == 0 && a1_0 != keyframeCount - 1) { // Interpolation frame
       final Quaternionf q0 = new Quaternionf();
       final Quaternionf q1 = new Quaternionf();
       final Vector3f translation = new Vector3f();
+      final float ratio = subFrame / (float)framesPerKeyframe;
 
       //LAB_800de050
       for(int i = 0; i < count; i++) {
@@ -164,7 +159,7 @@ public class Cmb extends TmdAnimationFile {
         q0.rotationZYX(modelTransforms.rotate_00.z, modelTransforms.rotate_00.y, modelTransforms.rotate_00.x);
         q1.rotationZYX(modelTransforms.rotate_00.z + subTransforms.rot_01.z, modelTransforms.rotate_00.y + subTransforms.rot_01.y, modelTransforms.rotate_00.x + subTransforms.rot_01.x);
 
-        this.lerp(q0, q1, modelPartMatrix.transfer, translation, 0.5f);
+        this.lerp(q0, q1, modelPartMatrix.transfer, translation, ratio);
         modelPartMatrix.rotation(q0);
       }
     } else {

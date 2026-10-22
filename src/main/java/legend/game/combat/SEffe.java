@@ -2582,13 +2582,16 @@ public final class SEffe {
           final LmbType0 lmb = (LmbType0)a2_0.lmb_0c;
 
           //LAB_801117ac
-          final int frameIndex = Math.max(0, effects.params_10.ticks_24) % (a2_0.keyframeCount_08 * 2);
-          final int keyframeIndex = frameIndex / 2;
+          final int tickMultiplier = Math.max(1, effects.battle.tickMultiplier());
+          final int framesPerKeyframe = 2 * tickMultiplier;
+          final int frameIndex = effects.battle.animationDisplayTicks(Math.max(0, effects.params_10.ticks_24)) % (a2_0.keyframeCount_08 * framesPerKeyframe);
+          final int keyframeIndex = frameIndex / framesPerKeyframe;
           final LmbTransforms14 lmbTransforms = lmb.partAnimations_08[partIndex].keyframes_08[keyframeIndex];
           scale.set(lmbTransforms.scale_00);
           trans.set(lmbTransforms.trans_06);
 
-          if((frameIndex & 0x1) != 0) {
+          final int subFrame = frameIndex % framesPerKeyframe;
+          if(subFrame != 0) {
             int nextKeyframeIndex = keyframeIndex + 1;
 
             if(nextKeyframeIndex == a2_0.keyframeCount_08) {
@@ -2597,8 +2600,9 @@ public final class SEffe {
 
             //LAB_8011188c
             final LmbTransforms14 nextKeyframe = lmb.partAnimations_08[partIndex].keyframes_08[nextKeyframeIndex];
-            scale.add(nextKeyframe.scale_00).div(2);
-            trans.add(nextKeyframe.trans_06).div(2);
+            final float ratio = subFrame / (float)framesPerKeyframe;
+            scale.lerp(nextKeyframe.scale_00, ratio);
+            trans.lerp(nextKeyframe.trans_06, ratio);
           }
 
           //LAB_80111958

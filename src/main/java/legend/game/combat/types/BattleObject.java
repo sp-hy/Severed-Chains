@@ -8,6 +8,8 @@ import legend.game.scripting.ScriptedObject;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
+import static legend.core.GameEngine.SCRIPTS;
+
 public abstract class BattleObject implements ScriptedObject {
   public static String EM__ = "EM  ";
   public static String BOBJ = "BOBJ";
@@ -15,9 +17,73 @@ public abstract class BattleObject implements ScriptedObject {
   public final Battle battle;
   public final String magic_00;
 
+  /** Skip interpolation for teleports / first placement (squared distance). */
+  private static final float INTERP_TELEPORT_DISTANCE_SQUARED = 4096.0f * 4096.0f;
+
+  private final Vector3f interpStartPos = new Vector3f();
+  private final Vector3f interpEndPos = new Vector3f();
+  private final Vector3f interpStartRot = new Vector3f();
+  private final Vector3f interpEndRot = new Vector3f();
+  private final Vector3f interpStartScale = new Vector3f();
+  private final Vector3f interpEndScale = new Vector3f();
+  private boolean interpInitialized;
+
   protected BattleObject(final Battle battle, final String magic) {
     this.battle = battle;
     this.magic_00 = magic;
+  }
+
+  /** Lerp root transform toward the latest 20 Hz pose. Call from the renderer, restore afterwards. */
+  public void applyVisualInterpolation() {
+    if(this.battle.tickMultiplier() <= 1) {
+      return;
+    }
+
+    final Vector3f pos = this.getPosition();
+    final Vector3f rot = this.getRotation();
+    final Vector3f scale = this.getScale();
+
+    if(!this.interpInitialized) {
+      this.interpStartPos.set(pos);
+      this.interpEndPos.set(pos);
+      this.interpStartRot.set(rot);
+      this.interpEndRot.set(rot);
+      this.interpStartScale.set(scale);
+      this.interpEndScale.set(scale);
+      this.interpInitialized = true;
+    }
+
+    if(SCRIPTS.willTick()) {
+      this.interpStartPos.set(this.interpEndPos);
+      this.interpStartRot.set(this.interpEndRot);
+      this.interpStartScale.set(this.interpEndScale);
+      this.interpEndPos.set(pos);
+      this.interpEndRot.set(rot);
+      this.interpEndScale.set(scale);
+
+      if(this.interpStartPos.distanceSquared(this.interpEndPos) > INTERP_TELEPORT_DISTANCE_SQUARED) {
+        this.interpStartPos.set(this.interpEndPos);
+        this.interpStartRot.set(this.interpEndRot);
+        this.interpStartScale.set(this.interpEndScale);
+      }
+    }
+
+    final float alpha = SCRIPTS.getInterpAlpha();
+    pos.set(this.interpStartPos).lerp(this.interpEndPos, alpha);
+    rot.x = this.interpStartRot.x + MathHelper.closestAngle(this.interpEndRot.x, this.interpStartRot.x) * alpha;
+    rot.y = this.interpStartRot.y + MathHelper.closestAngle(this.interpEndRot.y, this.interpStartRot.y) * alpha;
+    rot.z = this.interpStartRot.z + MathHelper.closestAngle(this.interpEndRot.z, this.interpStartRot.z) * alpha;
+    scale.set(this.interpStartScale).lerp(this.interpEndScale, alpha);
+  }
+
+  public void restoreLogicTransform() {
+    if(!this.interpInitialized) {
+      return;
+    }
+
+    this.getPosition().set(this.interpEndPos);
+    this.getRotation().set(this.interpEndRot);
+    this.getScale().set(this.interpEndScale);
   }
 
   @Override
