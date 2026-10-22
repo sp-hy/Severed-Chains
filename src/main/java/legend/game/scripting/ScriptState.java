@@ -5,6 +5,7 @@ import legend.core.MathHelper;
 import legend.core.QueuePool;
 import legend.core.memory.Method;
 import legend.game.Scus94491BpeSegment_8004;
+import legend.game.combat.types.BattleObject;
 import legend.game.combat.bent.BattleEntity27c;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -291,7 +292,16 @@ public class ScriptState<T extends ScriptedObject> {
     this.postLifecycleEvent(ScriptLifecycleEvent.Lifecycle.PRE_RENDER_CALLBACK);
 
     if(!this.hasAnyFlag(FLAG_RENDERER_NOT_SET | FLAG_CHILD_SCRIPT)) {
-      this.renderer_08.accept(this, this.innerStruct_00);
+      if(this.innerStruct_00 instanceof final BattleObject bobj) {
+        bobj.applyVisualInterpolation();
+        try {
+          this.renderer_08.accept(this, this.innerStruct_00);
+        } finally {
+          bobj.restoreLogicTransform();
+        }
+      } else {
+        this.renderer_08.accept(this, this.innerStruct_00);
+      }
     }
 
     this.postLifecycleEvent(ScriptLifecycleEvent.Lifecycle.POST_RENDER_CALLBACK);

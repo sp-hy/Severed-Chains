@@ -125,23 +125,23 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
   @Override
   @Method(0x800ea3f8L)
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.AnimType>> state) {
-    final EffectManagerData6c<EffectManagerParams.AnimType> manager = state.innerStruct_00;
+    // Pose is applied in render so it can interpolate on display frames
+  }
+
+  private void applyManagerPose(final EffectManagerData6c<EffectManagerParams.AnimType> manager, final int animationTicks) {
     final MV transformMatrix = new MV();
     calculateEffectTransforms(transformMatrix, manager);
 
-    final ModelEffect13c effect = (ModelEffect13c)manager.effect_44;
-    final Model124 model = effect.model_134;
+    final Model124 model = this.model_134;
     model.coord2_14.transforms.rotate.set(manager.params_10.rot_10);
     model.coord2_14.transforms.scale.set(manager.params_10.scale_16);
     model.zOffset_a0 = manager.params_10.z_22;
     model.coord2_14.coord.set(transformMatrix);
     model.coord2_14.flg = 0;
 
-    if(effect.anim_0c != null) {
-      model.anim_08.apply(manager.params_10.ticks_24);
+    if(this.anim_0c != null) {
+      model.anim_08.apply(animationTicks);
     }
-
-    //LAB_800ea4fc
   }
 
   @Override
@@ -157,6 +157,8 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
       }
 
       //LAB_800ea574
+      this.applyManagerPose(manager, manager.battle.animationDisplayTicks(manager.params_10.ticks_24));
+
       final Model124 model = this.model_134;
 
       final int oldTpage = model.tpage_108;

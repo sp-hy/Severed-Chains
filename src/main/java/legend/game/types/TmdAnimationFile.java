@@ -6,6 +6,7 @@ import legend.core.memory.Method;
 import legend.game.combat.deff.Anim;
 import legend.game.unpacker.FileData;
 
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Models.applyKeyframe;
 import static legend.game.Models.loadModelStandardAnimation;
 
@@ -51,22 +52,21 @@ public class TmdAnimationFile extends Anim {
       return;
     }
 
-    final int framesPerKeyframe = Math.round(2 * model.interpolationScale);
+    final int tickMultiplier = currentEngineState_8004dd04 != null ? Math.max(1, currentEngineState_8004dd04.tickMultiplier()) : 1;
+    final int baseFramesPerKeyframe = model.disableInterpolation_a2 ? 1 : 2;
+    final int framesPerKeyframe = Math.max(1, Math.round(baseFramesPerKeyframe * model.interpolationScale * tickMultiplier));
+    final int keyframeCount = Math.max(1, model.totalFrames_9a / 2);
+    final int totalFrames = keyframeCount * framesPerKeyframe;
+    final int frame = animationTicks % totalFrames;
 
     //LAB_800dd4fc
-    final int totalFrames;
-    final int frame;
     if(model.disableInterpolation_a2) {
-      totalFrames = model.totalFrames_9a / 2;
-      frame = animationTicks % totalFrames;
-      model.currentKeyframe_94 = frame;
+      model.currentKeyframe_94 = frame / tickMultiplier;
       applyKeyframe(model);
     } else {
       //LAB_800dd568
-      totalFrames = model.totalFrames_9a;
-      frame = animationTicks % totalFrames;
-      model.currentKeyframe_94 = frame / 2;
-      model.subFrameIndex = animationTicks % framesPerKeyframe;
+      model.currentKeyframe_94 = frame / framesPerKeyframe;
+      model.subFrameIndex = frame % framesPerKeyframe;
 
       // Last condition checks if this is a repeat frame (this was causing Haschel's twitching during transform, Gehrich teabagging, etc.)
       // GH#1664, GH#1687

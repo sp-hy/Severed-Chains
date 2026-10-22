@@ -17,6 +17,7 @@ import javax.annotation.Nullable;
 import java.util.function.Function;
 
 import static legend.core.GameEngine.PLATFORM;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.SItem.chapterNames_80114248;
 import static legend.game.SItem.worldMapNames_8011c1ec;
@@ -102,6 +103,12 @@ public abstract class EngineState<T extends EngineState<T>> {
    */
   public boolean tickersOnlyOnScriptFrames() {
     return false;
+  }
+
+  /** Maps a 20 Hz animation tick onto the current display frame so DEFF/CMB/LMB poses can interpolate. */
+  public int animationDisplayTicks(final int logicTicks) {
+    final int multiplier = Math.max(1, this.tickMultiplier());
+    return logicTicks * multiplier + (int)(SCRIPTS.getInterpAlpha() * multiplier);
   }
 
   public void menuClosed() {
