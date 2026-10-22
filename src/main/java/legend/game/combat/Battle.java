@@ -98,6 +98,7 @@ import legend.game.combat.ui.BattleAction;
 import legend.game.combat.ui.BattleActionTickFlowControl;
 import legend.game.combat.ui.BattleHud;
 import legend.game.combat.ui.BattleMenuStruct58;
+import legend.game.combat.ui.ListMenu;
 import legend.game.inventory.Equipment;
 import legend.game.inventory.EquipmentAttackType;
 import legend.game.inventory.ItemStack;
@@ -166,6 +167,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -520,6 +522,9 @@ public class Battle extends EngineState<Battle> {
   /** Next global is related to AdditionNameTextEffect1c */
   private int _800faa9d;
 
+  /** Last 20 Hz script's button-press HUD; replayed on in-between display frames. */
+  private final List<ButtonPressHudElement> buttonPressHudElements = new ArrayList<>();
+
   public static final ButtonPressHudMetrics06[] buttonPressHudMetrics_800faaa0 = {
     new ButtonPressHudMetrics06(0, 184, 96, 24, 16, 42),
     new ButtonPressHudMetrics06(0, 208, 96, 24, 16, 42),
@@ -625,6 +630,7 @@ public class Battle extends EngineState<Battle> {
   public void init() {
     super.init();
     clearCombatVars();
+    SCRIPTS.setFramesPerTick(this.tickMultiplier());
   }
 
   @Override
@@ -636,10 +642,15 @@ public class Battle extends EngineState<Battle> {
   private int inputPressed;
   private int inputRepeat;
   private int inputHeld;
+  private final Set<InputAction> latchedPressedActions = new HashSet<>();
 
   @Override
   public void inputActionPressed(final InputAction action, final boolean repeat) {
     super.inputActionPressed(action, repeat);
+
+    if(!repeat) {
+      this.latchedPressedActions.add(action);
+    }
 
     if(action == INPUT_ACTION_BTTL_ATTACK.get()) {
       if(!repeat) {
@@ -695,19 +706,59 @@ public class Battle extends EngineState<Battle> {
   @Override
   public void postScriptTick(final boolean scriptsTicked) {
     super.postScriptTick(scriptsTicked);
-    this.inputPressed = 0;
-    this.inputRepeat = 0;
+
+    for(int i = 0; i < this.buttonPressHudElements.size(); i++) {
+      final ButtonPressHudElement element = this.buttonPressHudElements.get(i);
+      renderButtonPressHudElement1(element.type, element.x, element.y, element.translucency, element.brightness);
+    }
+
+    // Latch pressed/repeat across display frames so 20 Hz script/addition ticks cannot miss a 60 Hz press
+    if(scriptsTicked) {
+      this.inputPressed = 0;
+      this.inputRepeat = 0;
+      this.latchedPressedActions.clear();
+      this.camera_800c67f0.captureLogicPose();
+
+      final ListMenu listMenu = this.hud.listMenu_800c6b60;
+      if(listMenu != null && listMenu.isWaitingToClose()) {
+        listMenu.closeNow();
+      }
+    }
+  }
+
+  /** True if the action was pressed since the last 20 Hz script tick. */
+  public boolean wasActionPressed(final InputAction action) {
+    return this.latchedPressedActions.contains(action);
+  }
+
+  /** Like {@link #wasActionPressed} but consumes the latch so 60 Hz callers do not repeat the press. */
+  public boolean consumeActionPressed(final InputAction action) {
+    return this.latchedPressedActions.remove(action);
   }
 
   @Override
   public int tickMultiplier() {
-    return 1;
+    return 3;
+  }
+
+  @Override
+  public int getTargetFps() {
+    return 60;
+  }
+
+  @Override
+  public boolean tickersOnlyOnScriptFrames() {
+    return true;
   }
 
   @Override
   @Method(0x800186a0L)
   public void tick() {
     super.tick();
+
+    if(SCRIPTS.willTick()) {
+      this.buttonPressHudElements.clear();
+    }
 
     if(battleLoaded_800bc94c) {
       this.checkIfCharacterAndMonsterModelsAreLoadedAndCacheLivingBents();
@@ -1323,6 +1374,7 @@ public class Battle extends EngineState<Battle> {
     battleState_8006e398.cacheLivingBents();
     this.rotateAndRenderBattleStage();
     this.renderSkybox();
+    this.camera_800c67f0.restoreLogicPose();
   }
 
   /**
@@ -1341,7 +1393,7 @@ public class Battle extends EngineState<Battle> {
       final QueuedSound28 queuedSound = new QueuedSound28();
       queuedSounds_800bd110.add(queuedSound);
 
-      playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, (short)repeatDelay, (short)initialDelay, bent);
+      playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, (short)(repeatDelay * this.tickMultiplier()), (short)(initialDelay * this.tickMultiplier()), bent);
     }
 
     //LAB_80019f9c
@@ -1367,7 +1419,7 @@ public class Battle extends EngineState<Battle> {
     queuedSounds_800bd110.add(queuedSound);
 
     final SoundFile soundFile = bent.soundFile;
-    playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, repeatDelay, initialDelay, bent);
+    playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, (short)(repeatDelay * this.tickMultiplier()), (short)(initialDelay * this.tickMultiplier()), bent);
 
     //LAB_8001a154
   }
@@ -2039,8 +2091,9 @@ public class Battle extends EngineState<Battle> {
       vsyncMode_8007a3b8 = 3;
       battleFlags_800bc960 |= 0x40;
       setProjectionPlaneDistance(320);
+      this.camera_800c67f0.projectionPlaneDistance_100 = 320;
       this.camera_800c67f0.resetCameraMovement();
-      this.encounterIntroFinishedTick = tickCount_800bb0fc + encounter.introWaitTicks;
+      this.encounterIntroFinishedTick = tickCount_800bb0fc + encounter.introWaitTicks * this.tickMultiplier();
       this.loadingStage++;
     }
 
@@ -2417,6 +2470,10 @@ public class Battle extends EngineState<Battle> {
   @Method(0x800c8068L)
   public void fadeOutBattle() {
     if(this.currentPostCombatActionFrame_800c6690 == 0) {
+      if(!SCRIPTS.willTick()) {
+        return;
+      }
+
       postBattleAction_800bc974.onCameraFadeoutStart(this);
 
       //LAB_800c80c8
@@ -2431,7 +2488,9 @@ public class Battle extends EngineState<Battle> {
 
     //LAB_800c81bc
     //LAB_800c81c0
-    this.currentPostCombatActionFrame_800c6690++;
+    if(SCRIPTS.willTick()) {
+      this.currentPostCombatActionFrame_800c6690++;
+    }
 
     if(this.currentPostCombatActionFrame_800c6690 >= postBattleAction_800bc974.getTotalDuration(this) || (PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get()) || PLATFORM.isActionPressed(INPUT_ACTION_MENU_BACK.get())) && this.currentPostCombatActionFrame_800c6690 >= 25) {
       EVENTS.postEvent(new BattleEndedEvent(this, encounter));
@@ -2625,8 +2684,10 @@ public class Battle extends EngineState<Battle> {
           .build();
       }
 
-      this.mcqOffsetX_800c6774 += this.mcqStepX_800c676c;
-      this.mcqOffsetY_800c6778 += this.mcqStepY_800c6770;
+      if(SCRIPTS.willTick()) {
+        this.mcqOffsetX_800c6774 += this.mcqStepX_800c676c;
+        this.mcqOffsetY_800c6778 += this.mcqStepY_800c6770;
+      }
       final int x0 = (this.mcqBaseOffsetX_800c66cc * MathHelper.radToPsxDeg(this.camera_800c67f0.calculateXAngleFromRefpointToViewpoint()) / 0x1000 + this.mcqOffsetX_800c6774) % mcq.screenWidth_14;
       int y = this.mcqOffsetY_800c6778 - MathHelper.radToPsxDeg(MathHelper.floorMod(this.camera_800c67f0.calculateYAngleFromRefpointToViewpoint() + MathHelper.PI, MathHelper.TWO_PI)) + 1888;
 
@@ -5173,6 +5234,7 @@ public class Battle extends EngineState<Battle> {
       final ScriptState<AdditionNameTextEffect1c> state = SCRIPTS.allocateScriptState("AdditionNameTextEffect1c", additionStruct);
       state.loadScriptFile(doNothingScript_8004f650);
       state.setTicker((s, effect) -> additionStruct.tickAdditionNameEffect(s, this._800faa9d));
+      state.setRenderer(additionStruct::renderAdditionNameEffect);
       final String additionName = addition.getName();
 
       //LAB_800d3e5c
@@ -5196,6 +5258,7 @@ public class Battle extends EngineState<Battle> {
         charStruct.scrolling_00 = 1;
         charStruct.dupes_02 = 8;
         charStruct.position_04 = charPosition;
+        charStruct.lastPosition_04 = charPosition;
         charStruct.offsetY_06 = displayOffsetY;
         charStruct.offsetX_08 = displayOffsetX;
         charStruct.offsetY_0a = displayOffsetY;
@@ -5224,6 +5287,7 @@ public class Battle extends EngineState<Battle> {
       final ScriptState<SpTextEffect40> state = SCRIPTS.allocateScriptState("SpTextEffect40", s1);
       state.loadScriptFile(doNothingScript_8004f650);
       state.setTicker((s, effect) -> s1.tickSpTextEffect(s, this._800faa94));
+      state.setRenderer(s1::renderSpTextEffect);
 
       s1.value_08 = s2;
       s1.destX_1c = this._800faa90 << 8;
@@ -5278,6 +5342,7 @@ public class Battle extends EngineState<Battle> {
       final ScriptState<AdditionNameTextEffect1c> state = SCRIPTS.allocateScriptState("AdditionScriptData1c", s0);
       state.loadScriptFile(doNothingScript_8004f650);
       state.setTicker((s, effect) -> s0.tickAdditionNameEffect(s, this._800faa9d));
+      state.setRenderer(s0::renderAdditionNameEffect);
       s0.ptr_18 = new AdditionCharEffectData0c[] {new AdditionCharEffectData0c()};
       s0.positionMovement_0c = 40;
       s0.renderer_14 = s0::renderAdditionSpGain;
@@ -5287,6 +5352,7 @@ public class Battle extends EngineState<Battle> {
       struct.scrolling_00 = 1;
       struct.dupes_02 = 8;
       struct.position_04 = -160;
+      struct.lastPosition_04 = -160;
       struct.offsetY_06 = 96;
       struct.offsetX_08 = 144 - (String.valueOf(totalSp).length() + 4) * 8;
       struct.offsetY_0a = 96;
@@ -5304,7 +5370,7 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.IN, type = ScriptParam.Type.INT, name = "brightness", description = "The brightness")
   @Method(0x800d46d4L)
   public FlowControl scriptRenderButtonPressHudElement(final RunningScript<?> script) {
-    renderButtonPressHudElement1(script.params_20[0].get(), script.params_20[1].get(), script.params_20[2].get(), Translucency.of(script.params_20[3].get()), script.params_20[4].get());
+    this.buttonPressHudElements.add(new ButtonPressHudElement(script.params_20[0].get(), script.params_20[1].get(), script.params_20[2].get(), Translucency.of(script.params_20[3].get()), script.params_20[4].get()));
     return FlowControl.CONTINUE;
   }
 
@@ -8000,12 +8066,14 @@ public class Battle extends EngineState<Battle> {
   @Method(0x800ec51cL)
   public void renderBattleStage(final BattleStage stage) {
     //LAB_800ec548
-    for(int i = 0; i < 10; i++) {
-      if(stage._618[i] != 0) {
-        this.applyBattleStageTextureAnimations(stage, i);
-      }
+    if(SCRIPTS.willTick()) {
+      for(int i = 0; i < 10; i++) {
+        if(stage._618[i] != 0) {
+          this.applyBattleStageTextureAnimations(stage, i);
+        }
 
-      //LAB_800ec560
+        //LAB_800ec560
+      }
     }
 
     tmdGp0Tpage_1f8003ec = 0;
@@ -8741,7 +8809,13 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.OUT, type = ScriptParam.Type.INT, name = "itemOrSpellId", description = "The item or spell registry ID")
   @Method(0x800f4600L)
   public FlowControl scriptGetItemOrSpellTargetingInfo(final RunningScript<?> script) {
-    this.hud.listMenu_800c6b60.getTargetingInfo(script);
+    final ListMenu listMenu = this.hud.listMenu_800c6b60;
+    if(listMenu == null) {
+      script.params_20[0].set(0);
+      return FlowControl.CONTINUE;
+    }
+
+    listMenu.getTargetingInfo(script);
 
     //LAB_800f4800
     //LAB_800f4804
@@ -9372,4 +9446,6 @@ public class Battle extends EngineState<Battle> {
       this.hud.currentAttackElements.add(icon);
     }
   }
+
+  private record ButtonPressHudElement(int type, int x, int y, Translucency translucency, int brightness) { }
 }

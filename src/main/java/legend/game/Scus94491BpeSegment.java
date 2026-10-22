@@ -140,11 +140,15 @@ public final class Scus94491BpeSegment {
     GPU.startFrame();
 
     if(currentEngineState_8004dd04 != null && currentEngineState_8004dd04.advancesTime()) {
-      gameState_800babc8.timestamp_a0 += vsyncMode_8007a3b8;
+      gameState_800babc8.timestamp_a0 += Math.max(1, 60 / currentEngineState_8004dd04.getTargetFps());
     }
 
-    final int frames = Math.max(1, vsyncMode_8007a3b8);
-    final int hz = 60 / frames * Config.getGameSpeedMultiplier();
+    final int hz;
+    if(currentEngineState_8004dd04 != null) {
+      hz = Math.max(1, currentEngineState_8004dd04.getTargetFps()) * Config.getGameSpeedMultiplier();
+    } else {
+      hz = 60 / Math.max(1, vsyncMode_8007a3b8) * Config.getGameSpeedMultiplier();
+    }
     RENDERER.window().setFpsLimit(hz);
     PLATFORM.setInputTickRate(hz);
 

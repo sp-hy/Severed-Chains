@@ -107,7 +107,6 @@ import java.util.function.BiFunction;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.GTE;
-import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
 import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
@@ -1400,7 +1399,7 @@ public final class SEffe {
         daddy.ticksRemainingToBeginAddition_12--;
         if(daddy.ticksRemainingToBeginAddition_12 == 0) {
           state.deallocateWithChildren();
-        } else if((PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ATTACK.get()) || CONFIG.getConfig(CoreMod.AUTO_DRAGOON_ADDITION_CONFIG.get())) && daddy.inputMode_13 != 2) {
+        } else if(((currentEngineState_8004dd04.getInputsPressed() & 0x20) != 0 || CONFIG.getConfig(CoreMod.AUTO_DRAGOON_ADDITION_CONFIG.get())) && daddy.inputMode_13 != 2) {
           daddy.meterSpinning_10 = 1;
           daddyMeterSpinning_80119f42 = 1;
         }
@@ -1436,7 +1435,7 @@ public final class SEffe {
 
           //LAB_801086bc
           //LAB_801086e0
-          if(getCurrentDragoonAdditionPressNumber(daddy, 0) != 0 && daddy.inputMode_13 == 1 || PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ATTACK.get()) && daddy.inputMode_13 == 0) {
+          if(getCurrentDragoonAdditionPressNumber(daddy, 0) != 0 && daddy.inputMode_13 == 1 || (currentEngineState_8004dd04.getInputsPressed() & 0x20) != 0 && daddy.inputMode_13 == 0) {
             //LAB_8010870c
             daddy.buttonPressGlowBrightnessFactor_11 = 4;
             daddy.countEyeFlashTicks_0d = 0;
@@ -1555,9 +1554,8 @@ public final class SEffe {
   public static void tickPerfectDragoonAdditionEffect(final ScriptState<PerfectDragoonAdditionEffect30> state, final PerfectDragoonAdditionEffect30 effect) {
     //LAB_80108a38
     for(int i = 7; i >= 0; i--) {
-      int brightness = 0x80;
-
       final PerfectDragoonAdditionEffectGlyph06 glyph = effect.glyphs_00[i];
+      glyph.lastXPosition_02 = glyph.currentXPosition_02;
 
       final int renderStage = glyph.renderStage_00;
       if(renderStage == 0) {
@@ -1567,13 +1565,6 @@ public final class SEffe {
         if(glyph.currentXPosition_02 < glyph.finalXPosition_04) {
           glyph.currentXPosition_02 = glyph.finalXPosition_04;
           glyph.renderStage_00++;
-        }
-
-        //LAB_80108aac
-        //LAB_80108ac4
-        for(int j = 0; j < 4; j++) {
-          brightness -= 0x20;
-          battleUiParts.queueDaddyPerfect(i, glyph.currentXPosition_02 + j * 6, daddyHudOffsetY_8011a020 + 16, brightness);
         }
       } else if(renderStage == 1) {
         //LAB_80108b58
@@ -1593,18 +1584,32 @@ public final class SEffe {
         state.deallocateWithChildren();
         return;
       }
-
-      //LAB_80108be8
-      //LAB_80108bec
-      //LAB_80108bf0
-      battleUiParts.queueDaddyPerfect(i, glyph.currentXPosition_02, daddyHudOffsetY_8011a020 + 16, brightness);
-
-      if((glyph.currentStaticRenderTick_01 & 0x1) != 0) {
-        battleUiParts.queueDaddyPerfect(i, glyph.currentXPosition_02, daddyHudOffsetY_8011a020 + 16, brightness);
-      }
       //LAB_80108cb0
     }
     //LAB_80108cc4
+  }
+
+  public static void renderPerfectDragoonAdditionEffect(final ScriptState<PerfectDragoonAdditionEffect30> state, final PerfectDragoonAdditionEffect30 effect) {
+    final float alpha = SCRIPTS.getInterpAlpha();
+
+    for(int i = 7; i >= 0; i--) {
+      int brightness = 0x80;
+      final PerfectDragoonAdditionEffectGlyph06 glyph = effect.glyphs_00[i];
+      final float x = Math.lerp(glyph.lastXPosition_02, glyph.currentXPosition_02, alpha);
+
+      if(glyph.renderStage_00 == 0) {
+        for(int j = 0; j < 4; j++) {
+          brightness -= 0x20;
+          battleUiParts.queueDaddyPerfect(i, x + j * 6, daddyHudOffsetY_8011a020 + 16, brightness);
+        }
+      }
+
+      battleUiParts.queueDaddyPerfect(i, x, daddyHudOffsetY_8011a020 + 16, brightness);
+
+      if((glyph.currentStaticRenderTick_01 & 0x1) != 0) {
+        battleUiParts.queueDaddyPerfect(i, x, daddyHudOffsetY_8011a020 + 16, brightness);
+      }
+    }
   }
 
   @Method(0x80108cf4L)
@@ -1614,6 +1619,7 @@ public final class SEffe {
     final ScriptState<PerfectDragoonAdditionEffect30> state = SCRIPTS.allocateScriptState("PerfectDragoonAdditionEffect30", new PerfectDragoonAdditionEffect30());
     state.loadScriptFile(doNothingScript_8004f650);
     state.setTicker(SEffe::tickPerfectDragoonAdditionEffect);
+    state.setRenderer(SEffe::renderPerfectDragoonAdditionEffect);
     final PerfectDragoonAdditionEffect30 effect = state.innerStruct_00;
 
     //LAB_80108d9c
@@ -1626,6 +1632,7 @@ public final class SEffe {
       glyph.renderStage_00 = 0;
       glyph.currentStaticRenderTick_01 = 0;
       glyph.currentXPosition_02 = initialXPosition;
+      glyph.lastXPosition_02 = initialXPosition;
       glyph.finalXPosition_04 = finalXPosition;
       initialXPosition = initialXPosition + 32;
     }
@@ -2583,13 +2590,16 @@ public final class SEffe {
           final LmbType0 lmb = (LmbType0)a2_0.lmb_0c;
 
           //LAB_801117ac
-          final int frameIndex = Math.max(0, effects.params_10.ticks_24) % (a2_0.keyframeCount_08 * 2);
-          final int keyframeIndex = frameIndex / 2;
+          final int tickMultiplier = Math.max(1, effects.battle.tickMultiplier());
+          final int framesPerKeyframe = 2 * tickMultiplier;
+          final int frameIndex = effects.battle.animationDisplayTicks(Math.max(0, effects.params_10.ticks_24)) % (a2_0.keyframeCount_08 * framesPerKeyframe);
+          final int keyframeIndex = frameIndex / framesPerKeyframe;
           final LmbTransforms14 lmbTransforms = lmb.partAnimations_08[partIndex].keyframes_08[keyframeIndex];
           scale.set(lmbTransforms.scale_00);
           trans.set(lmbTransforms.trans_06);
 
-          if((frameIndex & 0x1) != 0) {
+          final int subFrame = frameIndex % framesPerKeyframe;
+          if(subFrame != 0) {
             int nextKeyframeIndex = keyframeIndex + 1;
 
             if(nextKeyframeIndex == a2_0.keyframeCount_08) {
@@ -2598,8 +2608,9 @@ public final class SEffe {
 
             //LAB_8011188c
             final LmbTransforms14 nextKeyframe = lmb.partAnimations_08[partIndex].keyframes_08[nextKeyframeIndex];
-            scale.add(nextKeyframe.scale_00).div(2);
-            trans.add(nextKeyframe.trans_06).div(2);
+            final float ratio = subFrame / (float)framesPerKeyframe;
+            scale.lerp(nextKeyframe.scale_00, ratio);
+            trans.lerp(nextKeyframe.trans_06, ratio);
           }
 
           //LAB_80111958

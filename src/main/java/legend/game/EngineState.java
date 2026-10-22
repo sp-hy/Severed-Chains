@@ -17,6 +17,8 @@ import javax.annotation.Nullable;
 import java.util.function.Function;
 
 import static legend.core.GameEngine.PLATFORM;
+import static legend.core.GameEngine.SCRIPTS;
+import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.SItem.chapterNames_80114248;
 import static legend.game.SItem.worldMapNames_8011c1ec;
 import static legend.game.Scus94491BpeSegment_800b.continentIndex_800bf0b0;
@@ -88,6 +90,25 @@ public abstract class EngineState<T extends EngineState<T>> {
   /** The amount we've multiplied this engine state's frame rate by (e.g. world map was 20FPS, we multiplied it by 3 to bring it to 60FPS) */
   public int tickMultiplier() {
     return 2;
+  }
+
+  /** Target display frame rate. Battle unlocks rendering to 60 while keeping {@link legend.game.Graphics#vsyncMode_8007a3b8} at the original logic rate. */
+  public int getTargetFps() {
+    return 60 / Math.max(1, vsyncMode_8007a3b8);
+  }
+
+  /**
+   * If true, script tickers only run on script frames (see {@link legend.game.scripting.ScriptManager#setFramesPerTick(int)}).
+   * Renderers still run every display frame so visuals can interpolate.
+   */
+  public boolean tickersOnlyOnScriptFrames() {
+    return false;
+  }
+
+  /** Maps a 20 Hz animation tick onto the current display frame so DEFF/CMB/LMB poses can interpolate. */
+  public int animationDisplayTicks(final int logicTicks) {
+    final int multiplier = Math.max(1, this.tickMultiplier());
+    return logicTicks * multiplier + (int)(SCRIPTS.getInterpAlpha() * multiplier);
   }
 
   public void menuClosed() {

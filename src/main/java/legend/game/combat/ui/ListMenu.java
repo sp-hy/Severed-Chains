@@ -18,6 +18,8 @@ import org.apache.logging.log4j.MarkerManager;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
+import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.sound.Audio.playMenuSound;
 import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.modding.coremod.CoreMod.INPUT_ACTION_MENU_BACK;
@@ -121,6 +123,27 @@ public abstract class ListMenu {
     return true;
   };
 
+  public boolean isWaitingToClose() {
+    return this.menuState_00 == 9;
+  }
+
+  private void beginClose() {
+    this.menuState_00 = 9;
+    this.flags_02 &= ~(0x1 | 0x2);
+  }
+
+  public void closeNow() {
+    if(this.menuState_00 != 9) {
+      return;
+    }
+
+    this.lastPosition.lastListIndex_26 = this.listIndex_24;
+    this.lastPosition.lastListScroll_28 = this.listScroll_1e;
+    this.onClose();
+    this.delete();
+    this.onClose.run();
+  }
+
   private void initObjs() {
     if(this.menuObj == null) {
       final QuadBuilder builder = new QuadBuilder("Spell/item menu");
@@ -142,6 +165,11 @@ public abstract class ListMenu {
     }
   }
 
+  /**
+   * Input (states 1, 2, 6, 8, 9) runs every display frame so the list stays responsive at 60 FPS.
+   * Scroll animation and hold-repeat delay (states 3–5) only advance on script ticks — those
+   * counters were authored for the original 20 Hz battle frame rate.
+   */
   @Method(0x800f4b80L)
   public void tick() {
     //LAB_800f4bc0
@@ -320,6 +348,10 @@ public abstract class ListMenu {
 
       // Scroll past top of list
       case 3 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         int scrollAmount = this.scrollAmount_80;
         this.scrollCounter_90++;
         if(this.scrollCounter_90 >= 3) {
@@ -337,6 +369,10 @@ public abstract class ListMenu {
 
       // Scroll past bottom of list
       case 4 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         int scrollAmount = this.scrollAmount_80;
         this.scrollCounter_90++;
         if(this.scrollCounter_90 >= 3) {
@@ -355,6 +391,10 @@ public abstract class ListMenu {
 
       // Scroll down
       case 5 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         this.scrollCounter_90++;
 
         //LAB_800f5338
@@ -376,12 +416,12 @@ public abstract class ListMenu {
           //LAB_800f5488
           playMenuSound(2);
           this.selectionState_a0 = 1;
-          this.menuState_00 = 9;
+          this.beginClose();
         } else if(ret == 2) { // Instant confirm, no sound
           LOGGER.info(BATTLE, "Player selected index %d", this.listScroll_1e + this.listIndex_24);
           this.onUse(this.listScroll_1e + this.listIndex_24);
           this.selectionState_a0 = 1;
-          this.menuState_00 = 9;
+          this.beginClose();
         } else if(ret == -1) { // Pressed O
           LOGGER.info(BATTLE, "Player cancelled menu");
           //LAB_800f54b4
@@ -396,17 +436,13 @@ public abstract class ListMenu {
       // Close list
       case 8 -> {
         this.selectionState_a0 = -1;
-        this.menuState_00 = 9;
-        this.flags_02 &= ~(0x1 | 0x2);
+        this.beginClose();
       }
 
-      // Deallocate list
+      // Wait for the 20 Hz script to read targeting info before deallocating.
+      // hud.draw ticks this menu every display frame, so closing here can null
+      // listMenu before scriptGetItemOrSpellTargetingInfo runs.
       case 9 -> {
-        this.lastPosition.lastListIndex_26 = this.listIndex_24;
-        this.lastPosition.lastListScroll_28 = this.listScroll_1e;
-        this.onClose();
-        this.delete();
-        this.onClose.run();
       }
 
       default -> throw new RuntimeException("Invalid menu state " + this.menuState_00);
@@ -414,7 +450,7 @@ public abstract class ListMenu {
 
     //LAB_800f5694
     //LAB_800f5698
-    this.selectionArrowFrame_84 = tickCount_800bb0fc & 0x7;
+    this.selectionArrowFrame_84 = tickCount_800bb0fc / Math.max(1, vsyncMode_8007a3b8) & 0x7;
 
     //LAB_800f56ac
   }
