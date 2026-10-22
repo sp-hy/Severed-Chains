@@ -18,6 +18,8 @@ import org.apache.logging.log4j.MarkerManager;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
+import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.sound.Audio.playMenuSound;
 import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.modding.coremod.CoreMod.INPUT_ACTION_MENU_BACK;
@@ -142,6 +144,11 @@ public abstract class ListMenu {
     }
   }
 
+  /**
+   * Input (states 1, 2, 6, 8, 9) runs every display frame so the list stays responsive at 60 FPS.
+   * Scroll animation and hold-repeat delay (states 3–5) only advance on script ticks — those
+   * counters were authored for the original 20 Hz battle frame rate.
+   */
   @Method(0x800f4b80L)
   public void tick() {
     //LAB_800f4bc0
@@ -320,6 +327,10 @@ public abstract class ListMenu {
 
       // Scroll past top of list
       case 3 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         int scrollAmount = this.scrollAmount_80;
         this.scrollCounter_90++;
         if(this.scrollCounter_90 >= 3) {
@@ -337,6 +348,10 @@ public abstract class ListMenu {
 
       // Scroll past bottom of list
       case 4 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         int scrollAmount = this.scrollAmount_80;
         this.scrollCounter_90++;
         if(this.scrollCounter_90 >= 3) {
@@ -355,6 +370,10 @@ public abstract class ListMenu {
 
       // Scroll down
       case 5 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         this.scrollCounter_90++;
 
         //LAB_800f5338
@@ -414,7 +433,7 @@ public abstract class ListMenu {
 
     //LAB_800f5694
     //LAB_800f5698
-    this.selectionArrowFrame_84 = tickCount_800bb0fc & 0x7;
+    this.selectionArrowFrame_84 = tickCount_800bb0fc / Math.max(1, vsyncMode_8007a3b8) & 0x7;
 
     //LAB_800f56ac
   }

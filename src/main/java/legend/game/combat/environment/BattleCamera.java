@@ -18,8 +18,11 @@ import org.joml.Vector3f;
 import javax.annotation.Nullable;
 
 import static legend.core.GameEngine.GTE;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.GsSetRefView2L;
+import static legend.game.Graphics.getProjectionPlaneDistance;
 import static legend.game.Graphics.setProjectionPlaneDistance;
+import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.combat.Battle.ZERO;
 
@@ -31,6 +34,11 @@ public class BattleCamera {
   public static final int UPDATE_REFPOINT = 0x2;
 
   public final GsRVIEW2 rview2_00 = new GsRVIEW2();
+  private final GsRVIEW2 interpStart = new GsRVIEW2();
+  private final GsRVIEW2 interpEnd = new GsRVIEW2();
+  private float interpStartProjectionPlaneDistance;
+  private float interpEndProjectionPlaneDistance;
+  private boolean interpInitialized;
 
   // Refpoint stuff
   /** 8-bit fixed-point */
@@ -1022,19 +1030,77 @@ public class BattleCamera {
 
   @Method(0x800d8f10L)
   public void updateBattleCamera() {
-    if((this.flags_11c & UPDATE_VIEWPOINT) != 0) {
-      LOGGER.info(CAMERA, "[CAMERA] Array=_800facbc, FUN index=%d", this.viewpointCallbackIndex_120);
-      this.cameraViewpointMethods_800facbc[this.viewpointCallbackIndex_120].run();
+    if(!this.interpInitialized) {
+      this.interpStart.set(this.rview2_00);
+      this.interpEnd.set(this.rview2_00);
+      // projectionPlaneDistance_100 is 0 until a script writes it; Graphics is already 320 from init
+      if(this.projectionPlaneDistance_100 <= 0.0f) {
+        this.projectionPlaneDistance_100 = getProjectionPlaneDistance();
+      }
+      this.interpStartProjectionPlaneDistance = this.projectionPlaneDistance_100;
+      this.interpEndProjectionPlaneDistance = this.projectionPlaneDistance_100;
+      this.interpInitialized = true;
     }
 
-    if((this.flags_11c & UPDATE_REFPOINT) != 0) {
-      LOGGER.info(CAMERA, "[CAMERA] Array=_800fad1c, FUN index=%d", this.refpointCallbackIndex_121);
-      this.cameraRefpointMethods_800fad1c[this.refpointCallbackIndex_121].run();
+    if(SCRIPTS.willTick()) {
+      // Restore the 20 Hz pose in case the previous display frame left an interpolated view in rview2.
+      // Do not restore projectionPlaneDistance_100 — scripts write that after this method, and
+      // interpolating it onto GTE does not mutate the field.
+      this.rview2_00.set(this.interpEnd);
+
+      this.interpStart.set(this.rview2_00);
+      this.interpStartProjectionPlaneDistance = this.projectionPlaneDistance_100 > 0.0f ? this.projectionPlaneDistance_100 : this.interpEndProjectionPlaneDistance;
+
+      if((this.flags_11c & UPDATE_VIEWPOINT) != 0) {
+        LOGGER.info(CAMERA, "[CAMERA] Array=_800facbc, FUN index=%d", this.viewpointCallbackIndex_120);
+        this.cameraViewpointMethods_800facbc[this.viewpointCallbackIndex_120].run();
+      }
+
+      if((this.flags_11c & UPDATE_REFPOINT) != 0) {
+        LOGGER.info(CAMERA, "[CAMERA] Array=_800fad1c, FUN index=%d", this.refpointCallbackIndex_121);
+        this.cameraRefpointMethods_800fad1c[this.refpointCallbackIndex_121].run();
+      }
+
+      this.tickProjectionPlaneChange();
+
+      this.interpEnd.set(this.rview2_00);
+      if(this.projectionPlaneDistance_100 > 0.0f) {
+        this.interpEndProjectionPlaneDistance = this.projectionPlaneDistance_100;
+      }
     }
 
+    final float alpha = SCRIPTS.getInterpAlpha();
+    this.rview2_00.viewpoint_00.set(this.interpStart.viewpoint_00).lerp(this.interpEnd.viewpoint_00, alpha);
+    this.rview2_00.refpoint_0c.set(this.interpStart.refpoint_0c).lerp(this.interpEnd.refpoint_0c, alpha);
+    this.rview2_00.viewpointTwist_18 = (int)Math.lerp(this.interpStart.viewpointTwist_18, this.interpEnd.viewpointTwist_18, alpha);
+    final float interpolatedProjectionPlane = Math.lerp(this.interpStartProjectionPlaneDistance, this.interpEndProjectionPlaneDistance, alpha);
+    if(interpolatedProjectionPlane > 0.0f) {
+      setProjectionPlaneDistance(interpolatedProjectionPlane);
+    }
     GsSetRefView2L(this.rview2_00);
+
     this.wobbleCamera();
-    this.tickProjectionPlaneChange();
+  }
+
+  /** Put the 20 Hz camera pose back so scripts don't read a mid-interpolation view. Call after rendering. */
+  public void restoreLogicPose() {
+    if(!this.interpInitialized) {
+      return;
+    }
+
+    this.rview2_00.set(this.interpEnd);
+  }
+
+  /** Include script camera/FOV writes from this logic frame in the interpolation target. */
+  public void captureLogicPose() {
+    if(!this.interpInitialized) {
+      return;
+    }
+
+    this.interpEnd.set(this.rview2_00);
+    if(this.projectionPlaneDistance_100 > 0.0f) {
+      this.interpEndProjectionPlaneDistance = this.projectionPlaneDistance_100;
+    }
   }
 
   @Method(0x800d8fe0L)
@@ -1597,14 +1663,16 @@ public class BattleCamera {
   public void wobbleCamera() {
     if(this.useCameraWobble_800fabb8) {
       if(this.framesUntilWobble_800c67d4 != 0) {
-        this.framesUntilWobble_800c67d4--;
+        if(SCRIPTS.willTick()) {
+          this.framesUntilWobble_800c67d4--;
+        }
         return;
       }
 
       //LAB_800daabc
       final int x;
       final int y;
-      final int type = tickCount_800bb0fc & 0x3;
+      final int type = tickCount_800bb0fc / Math.max(1, vsyncMode_8007a3b8) & 0x3;
       if(type == 0) {
         //LAB_800dab04
         x = this.cameraWobbleOffsetX_800c67e4;
@@ -1628,10 +1696,12 @@ public class BattleCamera {
       //LAB_800dab78
       GTE.setScreenOffset(this.screenOffset_800c67bc.x + x, this.screenOffset_800c67bc.y + y);
 
-      this.wobbleFramesRemaining_800c67c4--;
-      if(this.wobbleFramesRemaining_800c67c4 <= 0) {
-        this.useCameraWobble_800fabb8 = false;
-        GTE.setScreenOffset(this.screenOffset_800c67bc.x, this.screenOffset_800c67bc.y);
+      if(SCRIPTS.willTick()) {
+        this.wobbleFramesRemaining_800c67c4--;
+        if(this.wobbleFramesRemaining_800c67c4 <= 0) {
+          this.useCameraWobble_800fabb8 = false;
+          GTE.setScreenOffset(this.screenOffset_800c67bc.x, this.screenOffset_800c67bc.y);
+        }
       }
     }
 
@@ -1647,6 +1717,7 @@ public class BattleCamera {
     this.refpointCallbackIndex_121 = 0;
     this.viewpointMoving_122 = false;
     this.refpointMoving_123 = false;
+    this.interpInitialized = false;
   }
 
   @Method(0x800dac70L)

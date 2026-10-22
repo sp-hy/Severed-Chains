@@ -320,7 +320,7 @@ public class BattleHud {
 
     //LAB_800ece9c
     this.battleMenu_800c6c34.transforms.identity();
-    this.battleMenu_800c6c34.transforms.transfer.set(GPU.getOffsetX() + screenCoords.x - 8, GPU.getOffsetY() + screenCoords.y + targetArrowOffsetY_800fb188[tickCount_800bb0fc & 0x7], 112.0f);
+    this.battleMenu_800c6c34.transforms.transfer.set(GPU.getOffsetX() + screenCoords.x - 8, GPU.getOffsetY() + screenCoords.y + targetArrowOffsetY_800fb188[this.logicTickCount() & 0x7], 112.0f);
     RENDERER.queueOrthoModel(this.battleMenu_800c6c34.menuObj, this.battleMenu_800c6c34.transforms, QueuedModelStandard.class)
       .vertices(this.battleMenu_800c6c34.targetArrowsObjOffset + colour * 4, 4)
       .translucency(Translucency.HALF_B_PLUS_HALF_F);
@@ -417,8 +417,11 @@ public class BattleHud {
       }
 
       //LAB_800efd00
-      this.tickFloatingNumbers();
+      if(SCRIPTS.willTick()) {
+        this.tickFloatingNumbers();
+      }
 
+      // Tick every display frame so list input stays responsive; ListMenu gates 20 Hz scroll internally
       if(this.listMenu_800c6b60 != null) {
         this.listMenu_800c6b60.tick();
       }
@@ -430,6 +433,13 @@ public class BattleHud {
     }
 
     this.drawUiElements();
+    // Action menu is ticked from the combat-menu script (20 Hz); draw it every display frame
+    this.renderActionMenu();
+  }
+
+  /** Battle visual clocks that were authored against 20 Hz `tickCount`. */
+  private int logicTickCount() {
+    return tickCount_800bb0fc / Math.max(1, this.battle.tickMultiplier());
   }
 
   @Method(0x800efd34L)
@@ -800,7 +810,7 @@ public class BattleHud {
           final int status = targetBent.status_0e;
 
           if((status & 0xff) != 0) {
-            if((tickCount_800bb0fc & 0x10) != 0) {
+            if((this.logicTickCount() & 0x10) != 0) {
               int mask = 0x80;
 
               //LAB_800f0e94
@@ -1479,7 +1489,7 @@ public class BattleHud {
       }
 
       case 1 -> {  // Checking for input
-        if(whichMenu_800bdc38 == WhichMenu.NONE_0 && !this.battleMenu_800c6c34.displayTargetArrowAndName_4c && !this.battleMenu_800c6c34.targetArrowHiding && PLATFORM.isActionPressed(LodMod.INPUT_ACTION_BTTL_OPTIONS.get())) {
+        if(whichMenu_800bdc38 == WhichMenu.NONE_0 && !this.battleMenu_800c6c34.displayTargetArrowAndName_4c && !this.battleMenu_800c6c34.targetArrowHiding && this.battle.wasActionPressed(LodMod.INPUT_ACTION_BTTL_OPTIONS.get())) {
           whichMenu_800bdc38 = WhichMenu.RENDER_NEW_MENU;
           menuStack.pushScreen(new BattleOptionsCategoryScreen(CONFIG, EnumSet.allOf(ConfigStorageLocation.class), () -> {
             ConfigStorage.saveConfig(CONFIG, ConfigStorageLocation.GLOBAL, Path.of("config.dcnf"));
@@ -1504,7 +1514,7 @@ public class BattleHud {
         this.battleMenu_800c6c34.cameraPositionSwitchTicksRemaining_44 = 0;
 
         // Input for changing camera angles
-        if(countCameraPositionIndicesIndices >= 2 && PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ROTATE_CAMERA.get())) {
+        if(countCameraPositionIndicesIndices >= 2 && this.battle.wasActionPressed(INPUT_ACTION_BTTL_ROTATE_CAMERA.get())) {
           this.currentCameraPositionIndicesIndicesIndex_800c6ba1++;
           if(this.currentCameraPositionIndicesIndicesIndex_800c6ba1 >= countCameraPositionIndicesIndices) {
             this.currentCameraPositionIndicesIndicesIndex_800c6ba1 = 0;
@@ -1579,29 +1589,29 @@ public class BattleHud {
           break;
         }
 
-        if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_TRANSFORM.get())) {
+        if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_TRANSFORM.get())) {
           selectedAction = this.useAction(TRANSFORM.get());
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_SPECIAL.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_SPECIAL.get())) {
           selectedAction = this.useAction(SPECIAL.get());
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ESCAPE.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_ESCAPE.get())) {
           selectedAction = this.useAction(ESCAPE.get());
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_GUARD.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_GUARD.get())) {
           selectedAction = this.useAction(GUARD.get());
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ITEMS.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_ITEMS.get())) {
           selectedAction = this.useAction(ITEMS.get());
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_SPELLS.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_SPELLS.get())) {
           selectedAction = this.useAction(SPELLS.get());
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ADDITIONS.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_BTTL_ADDITIONS.get())) {
           selectedAction = this.useAction(ADDITIONS.get());
         }
 
         // Input for pressing X on menu bar
         //LAB_800f671c
-        if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
+        if(this.battle.wasActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
           selectedAction = this.useAction(this.battleMenu_800c6c34.actions.get(this.battleMenu_800c6c34.selectedIcon_22));
           //LAB_800f6898
           // Input for pressing circle on menu bar
-        } else if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_BACK.get())) {
+        } else if(this.battle.wasActionPressed(INPUT_ACTION_MENU_BACK.get())) {
           //LAB_800f68a4
           //LAB_800f68bc
           playMenuSound(3);
@@ -1663,9 +1673,6 @@ public class BattleHud {
         this.battleMenu_800c6c34.iconStateIndex_26 = 0;
       }
     }
-
-    //LAB_800f6ae0
-    this.renderActionMenu();
 
     //LAB_800f6aec
     return selectedAction;
@@ -1846,7 +1853,7 @@ public class BattleHud {
     }
 
     //LAB_800f77f4
-    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_UP.get()) || PLATFORM.isActionPressed(INPUT_ACTION_MENU_RIGHT.get())) {
+    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_UP.get()) || this.battle.consumeActionPressed(INPUT_ACTION_MENU_UP.get()) || PLATFORM.isActionPressed(INPUT_ACTION_MENU_RIGHT.get()) || this.battle.consumeActionPressed(INPUT_ACTION_MENU_RIGHT.get())) {
       this.battleMenu_800c6c34.targetedSlot_800c697c++;
       if(this.battleMenu_800c6c34.targetedSlot_800c697c >= count) {
         this.battleMenu_800c6c34.targetedSlot_800c697c = 0;
@@ -1855,7 +1862,7 @@ public class BattleHud {
 
     //LAB_800f7830
     short t3 = 1;
-    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_DOWN.get()) || PLATFORM.isActionPressed(INPUT_ACTION_MENU_LEFT.get())) {
+    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_DOWN.get()) || this.battle.consumeActionPressed(INPUT_ACTION_MENU_DOWN.get()) || PLATFORM.isActionPressed(INPUT_ACTION_MENU_LEFT.get()) || this.battle.consumeActionPressed(INPUT_ACTION_MENU_LEFT.get())) {
       this.battleMenu_800c6c34.targetedSlot_800c697c--;
       if(this.battleMenu_800c6c34.targetedSlot_800c697c < 0) {
         this.battleMenu_800c6c34.targetedSlot_800c697c = count - 1;
@@ -1923,7 +1930,7 @@ public class BattleHud {
 
     //LAB_800f7a0c
     //LAB_800f7a10
-    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
+    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get()) || this.battle.consumeActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
       LOGGER.info(BATTLE, "Player selected target %d type %d", this.battleMenu_800c6c34.target_48, this.battleMenu_800c6c34.targetType_50);
       this.battleMenu_800c6c34.targetedSlot_800c697c = 0;
       this.battleMenu_800c6c34.displayTargetArrowAndName_4c = false;
@@ -1932,7 +1939,7 @@ public class BattleHud {
     }
 
     //LAB_800f7a38
-    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_BACK.get())) {
+    if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_BACK.get()) || this.battle.consumeActionPressed(INPUT_ACTION_MENU_BACK.get())) {
       LOGGER.info(BATTLE, "Player cancelled targeting");
       this.battleMenu_800c6c34.targetedSlot_800c697c = 0;
       this.battleMenu_800c6c34.target_48 = -1;

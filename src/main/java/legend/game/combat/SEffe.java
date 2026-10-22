@@ -107,7 +107,6 @@ import java.util.function.BiFunction;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.GTE;
-import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
 import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
@@ -1400,7 +1399,7 @@ public final class SEffe {
         daddy.ticksRemainingToBeginAddition_12--;
         if(daddy.ticksRemainingToBeginAddition_12 == 0) {
           state.deallocateWithChildren();
-        } else if((PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ATTACK.get()) || CONFIG.getConfig(CoreMod.AUTO_DRAGOON_ADDITION_CONFIG.get())) && daddy.inputMode_13 != 2) {
+        } else if(((currentEngineState_8004dd04.getInputsPressed() & 0x20) != 0 || CONFIG.getConfig(CoreMod.AUTO_DRAGOON_ADDITION_CONFIG.get())) && daddy.inputMode_13 != 2) {
           daddy.meterSpinning_10 = 1;
           daddyMeterSpinning_80119f42 = 1;
         }
@@ -1436,7 +1435,7 @@ public final class SEffe {
 
           //LAB_801086bc
           //LAB_801086e0
-          if(getCurrentDragoonAdditionPressNumber(daddy, 0) != 0 && daddy.inputMode_13 == 1 || PLATFORM.isActionPressed(INPUT_ACTION_BTTL_ATTACK.get()) && daddy.inputMode_13 == 0) {
+          if(getCurrentDragoonAdditionPressNumber(daddy, 0) != 0 && daddy.inputMode_13 == 1 || (currentEngineState_8004dd04.getInputsPressed() & 0x20) != 0 && daddy.inputMode_13 == 0) {
             //LAB_8010870c
             daddy.buttonPressGlowBrightnessFactor_11 = 4;
             daddy.countEyeFlashTicks_0d = 0;

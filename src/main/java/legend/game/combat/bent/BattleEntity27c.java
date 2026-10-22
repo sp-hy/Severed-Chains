@@ -699,21 +699,18 @@ public abstract class BattleEntity27c extends BattleObject {
 
   @Method(0x800cafb4L)
   protected void bentTicker(final ScriptState<? extends BattleEntity27c> state, final BattleEntity27c bent) {
-    if(!state.hasAnyFlag(FLAG_MONSTER_SUB_PART | FLAG_HIDE | FLAG_1)) {
-      applyModelRotationAndScale(this.model_148);
-
-      if(!state.hasFlag(FLAG_ANIMATE_ONCE) || this.model_148.remainingFrames_9e != 0) {
-        //LAB_800cb004
-        animateModel(this.model_148);
-      }
-    }
-
-    //LAB_800cb00c
+    // Visual updates happen in bentRenderer so they still run between 20 Hz script frames
   }
 
   @Method(0x800cb024L)
   protected void bentRenderer(final ScriptState<? extends BattleEntity27c> state, final BattleEntity27c bent) {
     if(!state.hasAnyFlag(FLAG_MONSTER_SUB_PART | FLAG_HIDE | FLAG_1)) {
+      applyModelRotationAndScale(this.model_148);
+
+      if(!state.hasFlag(FLAG_ANIMATE_ONCE) || this.model_148.remainingFrames_9e != 0) {
+        animateModel(this.model_148, 2 * this.battle.tickMultiplier());
+      }
+
       this.renderBttlModel(this.model_148, bent.combatant_144);
     }
 

@@ -109,7 +109,45 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.ElectricityType>> state) {
+    final EffectManagerData6c<EffectManagerParams.ElectricityType> manager = state.innerStruct_00;
 
+    if(this.currentColourFadeStep_04 + 1 == this.numColourFadeSteps_0c) {
+      return;
+    }
+
+    this.currentColourFadeStep_04++;
+
+    if(this.currentColourFadeStep_04 == 1) {
+      this.initializeRadialElectricityBoltColour(manager, this);
+
+      for(int i = 0; i < this.boltCount_00; i++) {
+        this.callback_2c.accept(manager, this.bolts_34[i], i);
+      }
+
+      return;
+    }
+
+    this.frameNum_2a = this.frameNum_2a + 1 & 0x1f;
+
+    final boolean type0 = this.renderIndex < 3;
+
+    for(int boltNum = 0; boltNum < this.boltCount_00; boltNum++) {
+      final LightningBoltEffect14 bolt = this.bolts_34[boltNum];
+
+      if(this.reinitializeNodes_24) {
+        this.initializeElectricityNodes(manager.params_10.trans_04, this, bolt);
+      }
+
+      this.callback_2c.accept(manager, bolt, boltNum);
+      bolt.angle_02 -= this.boltAngleStep_10 / 2.0f;
+
+      for(int segmentNum = 0; segmentNum < this.boltSegmentCount_28; segmentNum++) {
+        final LightningBoltEffectSegment30 segment = bolt.boltSegments_10[segmentNum];
+        segment.innerColour_10.sub(segment.innerColourFadeStep_1c);
+        segment.outerColour_16.sub(segment.outerColourFadeStep_22);
+        segment.unused_2a += type0 ? this.boltAngleStep_10 / 2.0f : this.boltAngleStep_10;
+      }
+    }
   }
 
   @Override
@@ -267,27 +305,11 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
   private void renderElectricEffectType0(final ScriptState<EffectManagerData6c<EffectManagerParams.ElectricityType>> state) {
     final EffectManagerData6c<EffectManagerParams.ElectricityType> manager = state.innerStruct_00;
 
-    if(this.currentColourFadeStep_04 + 1 == this.numColourFadeSteps_0c) {
-      return;
-    }
-
-    this.currentColourFadeStep_04++;
-
-    //LAB_80103140
-    if(this.currentColourFadeStep_04 == 1) {
-      this.initializeRadialElectricityBoltColour(manager, this);
-
-      //LAB_80103174
-      for(int i = 0; i < this.boltCount_00; i++) {
-        this.callback_2c.accept(manager, this.bolts_34[i], i);
-      }
-
+    if(this.currentColourFadeStep_04 + 1 == this.numColourFadeSteps_0c || this.currentColourFadeStep_04 <= 1) {
       return;
     }
 
     //LAB_801031cc
-    this.frameNum_2a = this.frameNum_2a + 1 & 0x1f;
-
     final boolean effectShouldRender = (manager.params_10.shouldRenderFrameBits_24 >> this.frameNum_2a & 0x1) == 0;
 
     final Vector2f[] vertexArray = new Vector2f[4];
@@ -308,13 +330,7 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
     for(int boltNum = 0; boltNum < this.boltCount_00; boltNum++) {
       final LightningBoltEffect14 bolt = this.bolts_34[boltNum];
 
-      if(this.reinitializeNodes_24) {
-        this.initializeElectricityNodes(manager.params_10.trans_04, this, bolt);
-      }
-
       //LAB_8010324c
-      this.callback_2c.accept(manager, bolt, boltNum);
-      bolt.angle_02 -= this.boltAngleStep_10 / 2.0f;
       float zMod = FUN_800cfb94(manager, bolt.rotation_04, bolt.boltSegments_10[0].origin_00, refOuterOriginA) / 4.0f;
       FUN_800cfb94(manager, bolt.rotation_04, bolt.boltSegments_10[this.boltSegmentCount_28 - 1].origin_00, lastSegmentRef);
       final float boltLengthX = lastSegmentRef.x - refOuterOriginA.x;
@@ -335,14 +351,6 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
       refOuterOriginB.y = refOuterOriginA.y - outerYOffset;
       refOuterOriginA.x += outerXOffset;
       refOuterOriginA.y += outerYOffset;
-
-      //LAB_80103488
-      for(int segmentNum = 0; segmentNum < this.boltSegmentCount_28; segmentNum++) {
-        final LightningBoltEffectSegment30 segment = bolt.boltSegments_10[segmentNum];
-        segment.innerColour_10.sub(segment.innerColourFadeStep_1c);
-        segment.outerColour_16.sub(segment.outerColourFadeStep_22);
-        segment.unused_2a += this.boltAngleStep_10 / 2.0f;
-      }
 
       //LAB_80103538
       if(effectShouldRender) {
@@ -447,192 +455,167 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
   private void renderElectricEffectType1(final ScriptState<EffectManagerData6c<EffectManagerParams.ElectricityType>> state) {
     final EffectManagerData6c<EffectManagerParams.ElectricityType> manager = state.innerStruct_00;
 
-    if(this.currentColourFadeStep_04 + 1 == this.numColourFadeSteps_0c) {
+    if(this.currentColourFadeStep_04 + 1 == this.numColourFadeSteps_0c || this.currentColourFadeStep_04 <= 1) {
       return;
     }
 
-    this.currentColourFadeStep_04++;
+    final LightningBoltEffectSegmentOrigin08[] segmentArray = new LightningBoltEffectSegmentOrigin08[this.boltSegmentCount_28];
+    Arrays.setAll(segmentArray, LightningBoltEffectSegmentOrigin08::new);
+    LightningBoltEffectSegmentOrigin08 currentSegmentOrigin;
+    LightningBoltEffectSegmentOrigin08 nextSegmentOrigin;
 
-    //LAB_80103e40
-    if(this.currentColourFadeStep_04 == 1) {
-      this.initializeRadialElectricityBoltColour(manager, this);
+    //LAB_80103ee4
+    final boolean effectShouldRender = (manager.params_10.shouldRenderFrameBits_24 >> this.frameNum_2a & 0x1) == 0;
 
-      //LAB_80103e8c
-      for(int i = 0; i < this.boltCount_00; i++) {
-        this.callback_2c.accept(manager, this.bolts_34[i], i);
+    final Translucency translucency = Translucency.of(manager.params_10.flags_00 >>> 28 & 0x3);
+
+    final PolyBuilder builder = new PolyBuilder("Lightning effect type 1", VertexOrder.TRIANGLES)
+      .bufferUsage(BufferUsage.STREAMING)
+      .translucency(translucency);
+
+    //LAB_80103f18
+    //LAB_80103f44
+    for(int i = 0; i < this.boltCount_00; i++) {
+      final LightningBoltEffect14 bolt = this.bolts_34[i];
+
+      //LAB_80103fc4
+      int segmentNum;
+      for(segmentNum = 0; segmentNum < this.boltSegmentCount_28; segmentNum++) {
+        final LightningBoltEffectSegment30 segment = bolt.boltSegments_10[segmentNum];
+        final LightningBoltEffectSegmentOrigin08 segmentOrigin = segmentArray[segmentNum];
+        final Vector2f ref = new Vector2f();
+        bolt.sz3_0c = FUN_800cfb94(manager, bolt.rotation_04, segment.origin_00, ref) / 4;
+        segmentOrigin.x_00 = ref.x;
+        segmentOrigin.y_04 = ref.y;
       }
-    } else {
-      final LightningBoltEffectSegmentOrigin08[] segmentArray = new LightningBoltEffectSegmentOrigin08[this.boltSegmentCount_28];
-      Arrays.setAll(segmentArray, LightningBoltEffectSegmentOrigin08::new);
-      LightningBoltEffectSegmentOrigin08 currentSegmentOrigin;
-      LightningBoltEffectSegmentOrigin08 nextSegmentOrigin;
 
-      //LAB_80103ee4
-      this.frameNum_2a = this.frameNum_2a + 1 & 0x1f;
-      final boolean effectShouldRender = (manager.params_10.shouldRenderFrameBits_24 >> this.frameNum_2a & 0x1) == 0;
+      //LAB_801040d0
+      if(effectShouldRender) {
+        final float boltLengthX = segmentArray[segmentNum - 1].x_00 - segmentArray[0].x_00;
+        final float boltLengthY = segmentArray[segmentNum - 1].y_04 - segmentArray[0].y_04;
+        final float angle = -MathHelper.atan2(boltLengthX, boltLengthY);
+        final float sin = MathHelper.sin(angle);
+        final float cos = MathHelper.cosFromSin(sin, angle);
+        float currentSegmentScale = bolt.boltSegments_10[0].scaleMultiplier_28 * manager.params_10.scale_16.x;
+        float outerOriginXa = segmentArray[0].x_00 + cos * currentSegmentScale;
+        float outerOriginYa = segmentArray[0].y_04 + sin * currentSegmentScale;
+        float outerOriginXb = segmentArray[0].x_00 - cos * currentSegmentScale;
+        float outerOriginYb = segmentArray[0].y_04 - sin * currentSegmentScale;
 
-      final Translucency translucency = Translucency.of(manager.params_10.flags_00 >>> 28 & 0x3);
+        final float z = manager.params_10.z_22 + bolt.sz3_0c;
+        if(z >= 0xa0) {
+          if(z >= 0xffe) {
+            bolt.sz3_0c = 0xffe - manager.params_10.z_22;
+          }
 
-      final PolyBuilder builder = new PolyBuilder("Lightning effect type 1", VertexOrder.TRIANGLES)
-        .bufferUsage(BufferUsage.STREAMING)
-        .translucency(translucency);
+          //LAB_8010422c
+          //LAB_8010424c
+          for(segmentNum = 0; segmentNum < this.boltSegmentCount_28 - 1; segmentNum++) {
+            final LightningBoltEffectSegment30 currentSegment = bolt.boltSegments_10[segmentNum];
+            final LightningBoltEffectSegment30 nextSegment = bolt.boltSegments_10[segmentNum + 1];
+            currentSegmentScale = currentSegment.scaleMultiplier_28 * manager.params_10.scale_16.x;
+            final float nextSegmentScale = nextSegment.scaleMultiplier_28 * manager.params_10.scale_16.x;
 
-      //LAB_80103f18
-      //LAB_80103f44
-      for(int i = 0; i < this.boltCount_00; i++) {
-        final LightningBoltEffect14 bolt = this.bolts_34[i];
+            if(this.type1RendererType_18) {
+              currentSegmentOrigin = segmentArray[segmentNum];
+              nextSegmentOrigin = segmentArray[segmentNum + 1];
+              final float outerEndpointXa = nextSegmentOrigin.x_00 + cos * currentSegmentScale;
+              final float outerEndpointYa = nextSegmentOrigin.y_04 + sin * currentSegmentScale;
+              final float outerEndpointXb = nextSegmentOrigin.x_00 - cos * currentSegmentScale;
+              final float outerEndpointYb = nextSegmentOrigin.y_04 - sin * currentSegmentScale;
 
-        if(this.reinitializeNodes_24) {
-          this.initializeElectricityNodes(manager.params_10.trans_04, this, bolt);
-        }
+              final Vector2f[] vertexArray = new Vector2f[4];
+              Arrays.setAll(vertexArray, n -> new Vector2f());
 
-        //LAB_80103f6c
-        this.callback_2c.accept(manager, bolt, i);
+              vertexArray[1].x = nextSegmentOrigin.x_00;
+              vertexArray[1].y = nextSegmentOrigin.y_04;
+              vertexArray[3].x = currentSegmentOrigin.x_00;
+              vertexArray[3].y = currentSegmentOrigin.y_04;
 
-        bolt.angle_02 -= this.boltAngleStep_10 / 2.0f;
+              vertexArray[0].x = outerEndpointXa;
+              vertexArray[0].y = outerEndpointYa;
+              vertexArray[2].x = outerOriginXa;
+              vertexArray[2].y = outerOriginYa;
+              renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
 
-        //LAB_80103fc4
-        int segmentNum;
-        for(segmentNum = 0; segmentNum < this.boltSegmentCount_28; segmentNum++) {
-          final LightningBoltEffectSegment30 segment = bolt.boltSegments_10[segmentNum];
-          final LightningBoltEffectSegmentOrigin08 segmentOrigin = segmentArray[segmentNum];
-          final Vector2f ref = new Vector2f();
-          bolt.sz3_0c = FUN_800cfb94(manager, bolt.rotation_04, segment.origin_00, ref) / 4;
-          segmentOrigin.x_00 = ref.x;
-          segmentOrigin.y_04 = ref.y;
-          segment.innerColour_10.sub(segment.innerColourFadeStep_1c);
-          segment.outerColour_16.sub(segment.outerColourFadeStep_22);
-          segment.unused_2a += this.boltAngleStep_10;
-        }
+              vertexArray[0].x = (vertexArray[0].x - vertexArray[1].x) / manager.params_10.sizeDivisor_30 + vertexArray[1].x;
+              vertexArray[0].y = (vertexArray[0].y - vertexArray[1].y) / manager.params_10.sizeDivisor_30 + vertexArray[1].y;
+              vertexArray[2].x = (vertexArray[2].x - vertexArray[3].x) / manager.params_10.sizeDivisor_30 + vertexArray[3].x;
+              vertexArray[2].y = (vertexArray[2].y - vertexArray[3].y) / manager.params_10.sizeDivisor_30 + vertexArray[3].y;
+              renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
 
-        //LAB_801040d0
-        if(effectShouldRender) {
-          final float boltLengthX = segmentArray[segmentNum - 1].x_00 - segmentArray[0].x_00;
-          final float boltLengthY = segmentArray[segmentNum - 1].y_04 - segmentArray[0].y_04;
-          final float angle = -MathHelper.atan2(boltLengthX, boltLengthY);
-          final float sin = MathHelper.sin(angle);
-          final float cos = MathHelper.cosFromSin(sin, angle);
-          float currentSegmentScale = bolt.boltSegments_10[0].scaleMultiplier_28 * manager.params_10.scale_16.x;
-          float outerOriginXa = segmentArray[0].x_00 + cos * currentSegmentScale;
-          float outerOriginYa = segmentArray[0].y_04 + sin * currentSegmentScale;
-          float outerOriginXb = segmentArray[0].x_00 - cos * currentSegmentScale;
-          float outerOriginYb = segmentArray[0].y_04 - sin * currentSegmentScale;
+              vertexArray[0].x = outerEndpointXb;
+              vertexArray[0].y = outerEndpointYb;
+              vertexArray[2].x = outerOriginXb;
+              vertexArray[2].y = outerOriginYb;
+              renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
 
-          final float z = manager.params_10.z_22 + bolt.sz3_0c;
-          if(z >= 0xa0) {
-            if(z >= 0xffe) {
-              bolt.sz3_0c = 0xffe - manager.params_10.z_22;
-            }
+              vertexArray[0].x = (vertexArray[0].x - vertexArray[1].x) / manager.params_10.sizeDivisor_30 + vertexArray[1].x;
+              vertexArray[0].y = (vertexArray[0].y - vertexArray[1].y) / manager.params_10.sizeDivisor_30 + vertexArray[1].y;
+              vertexArray[2].x = (vertexArray[2].x - vertexArray[3].x) / manager.params_10.sizeDivisor_30 + vertexArray[3].x;
+              vertexArray[2].y = (vertexArray[2].y - vertexArray[3].y) / manager.params_10.sizeDivisor_30 + vertexArray[3].y;
+              renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
 
-            //LAB_8010422c
-            //LAB_8010424c
-            for(segmentNum = 0; segmentNum < this.boltSegmentCount_28 - 1; segmentNum++) {
-              final LightningBoltEffectSegment30 currentSegment = bolt.boltSegments_10[segmentNum];
-              final LightningBoltEffectSegment30 nextSegment = bolt.boltSegments_10[segmentNum + 1];
-              currentSegmentScale = currentSegment.scaleMultiplier_28 * manager.params_10.scale_16.x;
-              final float nextSegmentScale = nextSegment.scaleMultiplier_28 * manager.params_10.scale_16.x;
+              outerOriginXa = outerEndpointXa;
+              outerOriginYa = outerEndpointYa;
+              outerOriginXb = outerEndpointXb;
+              outerOriginYb = outerEndpointYb;
+            } else {
+              //LAB_801045e8
+              currentSegmentOrigin = segmentArray[segmentNum];
+              nextSegmentOrigin = segmentArray[segmentNum + 1];
+              float centerLineEndpointX = Math.abs(currentSegmentOrigin.x_00 - nextSegmentOrigin.x_00);
+              centerLineEndpointX = seed_800fa754.nextFloat(centerLineEndpointX * 2 + 1) - centerLineEndpointX + currentSegmentOrigin.x_00;
+              float centerLineOriginX = currentSegmentOrigin.x_00;
+              float centerLineOriginY = currentSegmentOrigin.y_04;
+              float centerLineEndpointY = (nextSegmentOrigin.y_04 - currentSegmentOrigin.y_04) / 2 + currentSegmentOrigin.y_04;
+              final float nextSegmentQuarterScale = nextSegmentScale / 4.0f;
+              final float currentSegmentQuarterScale = currentSegmentScale / 4.0f;
 
-              if(this.type1RendererType_18) {
-                currentSegmentOrigin = segmentArray[segmentNum];
-                nextSegmentOrigin = segmentArray[segmentNum + 1];
-                final float outerEndpointXa = nextSegmentOrigin.x_00 + cos * currentSegmentScale;
-                final float outerEndpointYa = nextSegmentOrigin.y_04 + sin * currentSegmentScale;
-                final float outerEndpointXb = nextSegmentOrigin.x_00 - cos * currentSegmentScale;
-                final float outerEndpointYb = nextSegmentOrigin.y_04 - sin * currentSegmentScale;
-
+              //LAB_801046c4
+              for(int j = 2; j > 0; j--) {
                 final Vector2f[] vertexArray = new Vector2f[4];
                 Arrays.setAll(vertexArray, n -> new Vector2f());
 
-                vertexArray[1].x = nextSegmentOrigin.x_00;
-                vertexArray[1].y = nextSegmentOrigin.y_04;
-                vertexArray[3].x = currentSegmentOrigin.x_00;
-                vertexArray[3].y = currentSegmentOrigin.y_04;
+                vertexArray[0].y = centerLineEndpointY;
+                vertexArray[1].y = centerLineEndpointY;
+                vertexArray[2].y = centerLineOriginY;
+                vertexArray[3].y = centerLineOriginY;
 
-                vertexArray[0].x = outerEndpointXa;
-                vertexArray[0].y = outerEndpointYa;
-                vertexArray[2].x = outerOriginXa;
-                vertexArray[2].y = outerOriginYa;
+                vertexArray[0].x = centerLineEndpointX - nextSegmentScale;
+                vertexArray[1].x = centerLineEndpointX + 1;
+                vertexArray[2].x = centerLineOriginX - currentSegmentScale;
+                vertexArray[3].x = centerLineOriginX + 1;
                 renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-
-                vertexArray[0].x = (vertexArray[0].x - vertexArray[1].x) / manager.params_10.sizeDivisor_30 + vertexArray[1].x;
-                vertexArray[0].y = (vertexArray[0].y - vertexArray[1].y) / manager.params_10.sizeDivisor_30 + vertexArray[1].y;
-                vertexArray[2].x = (vertexArray[2].x - vertexArray[3].x) / manager.params_10.sizeDivisor_30 + vertexArray[3].x;
-                vertexArray[2].y = (vertexArray[2].y - vertexArray[3].y) / manager.params_10.sizeDivisor_30 + vertexArray[3].y;
+                vertexArray[0].x = centerLineEndpointX - nextSegmentQuarterScale;
+                vertexArray[2].x = centerLineOriginX - currentSegmentQuarterScale;
+                renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
+                vertexArray[0].x = centerLineEndpointX + nextSegmentScale;
+                vertexArray[1].x = centerLineEndpointX;
+                vertexArray[2].x = centerLineOriginX + currentSegmentScale;
+                vertexArray[3].x = centerLineOriginX;
+                renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
+                vertexArray[0].x = centerLineEndpointX + nextSegmentQuarterScale;
+                vertexArray[2].x = centerLineOriginX + currentSegmentQuarterScale;
                 renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
 
-                vertexArray[0].x = outerEndpointXb;
-                vertexArray[0].y = outerEndpointYb;
-                vertexArray[2].x = outerOriginXb;
-                vertexArray[2].y = outerOriginYb;
-                renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-
-                vertexArray[0].x = (vertexArray[0].x - vertexArray[1].x) / manager.params_10.sizeDivisor_30 + vertexArray[1].x;
-                vertexArray[0].y = (vertexArray[0].y - vertexArray[1].y) / manager.params_10.sizeDivisor_30 + vertexArray[1].y;
-                vertexArray[2].x = (vertexArray[2].x - vertexArray[3].x) / manager.params_10.sizeDivisor_30 + vertexArray[3].x;
-                vertexArray[2].y = (vertexArray[2].y - vertexArray[3].y) / manager.params_10.sizeDivisor_30 + vertexArray[3].y;
-                renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-
-                outerOriginXa = outerEndpointXa;
-                outerOriginYa = outerEndpointYa;
-                outerOriginXb = outerEndpointXb;
-                outerOriginYb = outerEndpointYb;
-              } else {
-                //LAB_801045e8
-                currentSegmentOrigin = segmentArray[segmentNum];
-                nextSegmentOrigin = segmentArray[segmentNum + 1];
-                float centerLineEndpointX = Math.abs(currentSegmentOrigin.x_00 - nextSegmentOrigin.x_00);
-                centerLineEndpointX = seed_800fa754.nextFloat(centerLineEndpointX * 2 + 1) - centerLineEndpointX + currentSegmentOrigin.x_00;
-                float centerLineOriginX = currentSegmentOrigin.x_00;
-                float centerLineOriginY = currentSegmentOrigin.y_04;
-                float centerLineEndpointY = (nextSegmentOrigin.y_04 - currentSegmentOrigin.y_04) / 2 + currentSegmentOrigin.y_04;
-                final float nextSegmentQuarterScale = nextSegmentScale / 4.0f;
-                final float currentSegmentQuarterScale = currentSegmentScale / 4.0f;
-
-                //LAB_801046c4
-                for(int j = 2; j > 0; j--) {
-                  final Vector2f[] vertexArray = new Vector2f[4];
-                  Arrays.setAll(vertexArray, n -> new Vector2f());
-
-                  vertexArray[0].y = centerLineEndpointY;
-                  vertexArray[1].y = centerLineEndpointY;
-                  vertexArray[2].y = centerLineOriginY;
-                  vertexArray[3].y = centerLineOriginY;
-
-                  vertexArray[0].x = centerLineEndpointX - nextSegmentScale;
-                  vertexArray[1].x = centerLineEndpointX + 1;
-                  vertexArray[2].x = centerLineOriginX - currentSegmentScale;
-                  vertexArray[3].x = centerLineOriginX + 1;
-                  renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-                  vertexArray[0].x = centerLineEndpointX - nextSegmentQuarterScale;
-                  vertexArray[2].x = centerLineOriginX - currentSegmentQuarterScale;
-                  renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-                  vertexArray[0].x = centerLineEndpointX + nextSegmentScale;
-                  vertexArray[1].x = centerLineEndpointX;
-                  vertexArray[2].x = centerLineOriginX + currentSegmentScale;
-                  vertexArray[3].x = centerLineOriginX;
-                  renderSegmentGradient(builder, currentSegment.outerColour_16, nextSegment.outerColour_16, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-                  vertexArray[0].x = centerLineEndpointX + nextSegmentQuarterScale;
-                  vertexArray[2].x = centerLineOriginX + currentSegmentQuarterScale;
-                  renderSegmentGradient(builder, currentSegment.innerColour_10, nextSegment.innerColour_10, vertexArray, bolt.sz3_0c, manager.params_10.z_22, translucency);
-
-                  centerLineOriginX = centerLineEndpointX;
-                  centerLineOriginY = centerLineEndpointY;
-                  centerLineEndpointX = nextSegmentOrigin.x_00;
-                  centerLineEndpointY = nextSegmentOrigin.y_04;
-                }
+                centerLineOriginX = centerLineEndpointX;
+                centerLineOriginY = centerLineEndpointY;
+                centerLineEndpointX = nextSegmentOrigin.x_00;
+                centerLineEndpointY = nextSegmentOrigin.y_04;
               }
             }
           }
         }
       }
+    }
 
-      if(effectShouldRender) {
-        final Obj obj = builder.build();
-        obj.delete();
+    if(effectShouldRender) {
+      final Obj obj = builder.build();
+      obj.delete();
 
-        this.transforms.transfer.set(GPU.getOffsetX(), GPU.getOffsetY(), 0.0f);
-        RENDERER.queueOrthoModel(obj, this.transforms, QueuedModelStandard.class);
-      }
+      this.transforms.transfer.set(GPU.getOffsetX(), GPU.getOffsetY(), 0.0f);
+      RENDERER.queueOrthoModel(obj, this.transforms, QueuedModelStandard.class);
     }
   }
 

@@ -62,7 +62,39 @@ public class AdditionSparksEffect08 implements Effect<EffectManagerParams.VoidTy
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
+    final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
 
+    //LAB_800d0a7c
+    for(int i = 0; i < this.count_00; i++) {
+      final AdditionSparksEffectInstance4c inst = this.instances_04[i];
+
+      if(inst.delay_04 != 0) {
+        inst.delay_04--;
+        //LAB_800d0a94
+      } else if(inst.ticksRemaining_05 != 0) {
+        if(inst.ticksExisted_00 == 0) {
+          this.FUN_800d09c0(manager, inst);
+        }
+
+        //LAB_800d0ac8
+        inst.ticksExisted_00++;
+        inst.ticksRemaining_05--;
+        inst.endPos_18.set(inst.startPos_08);
+        inst.startPos_08.add(inst.speed_28);
+        inst.speed_28.add(inst.acceleration_38);
+
+        if(inst.startPos_08.y > 0.0f) {
+          inst.speed_28.y = -inst.speed_28.y / 2.0f;
+        }
+
+        //LAB_800d0ca0
+        inst.r_40 -= inst.stepR_46;
+        inst.g_42 -= inst.stepG_48;
+        inst.b_44 -= inst.stepB_4a;
+      } else {
+        inst.ticksExisted_00 = 0;
+      }
+    }
   }
 
   @Override
@@ -86,18 +118,7 @@ public class AdditionSparksEffect08 implements Effect<EffectManagerParams.VoidTy
     for(int i = 0; i < this.count_00; i++) {
       final AdditionSparksEffectInstance4c inst = this.instances_04[i];
 
-      if(inst.delay_04 != 0) {
-        inst.delay_04--;
-        //LAB_800d0a94
-      } else if(inst.ticksRemaining_05 != 0) {
-        if(inst.ticksExisted_00 == 0) {
-          this.FUN_800d09c0(manager, inst);
-        }
-
-        //LAB_800d0ac8
-        inst.ticksExisted_00++;
-        inst.ticksRemaining_05--;
-        inst.startPos_08.add(inst.speed_28);
+      if(inst.delay_04 == 0 && inst.ticksExisted_00 != 0) {
         final Vector2f start = new Vector2f();
         final Vector2f end = new Vector2f();
         final float instZ = transformWorldspaceToScreenspace(inst.startPos_08, start);
@@ -105,13 +126,6 @@ public class AdditionSparksEffect08 implements Effect<EffectManagerParams.VoidTy
 
         if(i == 0) {
           s7 = instZ / 4.0f;
-        }
-
-        //LAB_800d0b3c
-        inst.speed_28.add(inst.acceleration_38);
-
-        if(inst.startPos_08.y > 0.0f) {
-          inst.speed_28.y = -inst.speed_28.y / 2.0f;
         }
 
         //LAB_800d0b88
@@ -131,12 +145,6 @@ public class AdditionSparksEffect08 implements Effect<EffectManagerParams.VoidTy
             .translucency(Translucency.B_PLUS_F)
             .colour((inst.r_40 >>> 8) / 255.0f, (inst.g_42 >>> 8) / 255.0f, (inst.b_44 >>> 8) / 255.0f);
         }
-
-        //LAB_800d0ca0
-        inst.r_40 -= inst.stepR_46;
-        inst.g_42 -= inst.stepG_48;
-        inst.b_44 -= inst.stepB_4a;
-        inst.endPos_18.set(inst.startPos_08);
       }
 
       //LAB_800d0cec

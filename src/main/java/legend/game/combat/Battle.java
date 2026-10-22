@@ -166,6 +166,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -625,6 +626,7 @@ public class Battle extends EngineState<Battle> {
   public void init() {
     super.init();
     clearCombatVars();
+    SCRIPTS.setFramesPerTick(this.tickMultiplier());
   }
 
   @Override
@@ -636,10 +638,15 @@ public class Battle extends EngineState<Battle> {
   private int inputPressed;
   private int inputRepeat;
   private int inputHeld;
+  private final Set<InputAction> latchedPressedActions = new HashSet<>();
 
   @Override
   public void inputActionPressed(final InputAction action, final boolean repeat) {
     super.inputActionPressed(action, repeat);
+
+    if(!repeat) {
+      this.latchedPressedActions.add(action);
+    }
 
     if(action == INPUT_ACTION_BTTL_ATTACK.get()) {
       if(!repeat) {
@@ -695,13 +702,39 @@ public class Battle extends EngineState<Battle> {
   @Override
   public void postScriptTick(final boolean scriptsTicked) {
     super.postScriptTick(scriptsTicked);
-    this.inputPressed = 0;
-    this.inputRepeat = 0;
+
+    // Latch pressed/repeat across display frames so 20 Hz script/addition ticks cannot miss a 60 Hz press
+    if(scriptsTicked) {
+      this.inputPressed = 0;
+      this.inputRepeat = 0;
+      this.latchedPressedActions.clear();
+      this.camera_800c67f0.captureLogicPose();
+    }
+  }
+
+  /** True if the action was pressed since the last 20 Hz script tick. */
+  public boolean wasActionPressed(final InputAction action) {
+    return this.latchedPressedActions.contains(action);
+  }
+
+  /** Like {@link #wasActionPressed} but consumes the latch so 60 Hz callers do not repeat the press. */
+  public boolean consumeActionPressed(final InputAction action) {
+    return this.latchedPressedActions.remove(action);
   }
 
   @Override
   public int tickMultiplier() {
-    return 1;
+    return 3;
+  }
+
+  @Override
+  public int getTargetFps() {
+    return 60;
+  }
+
+  @Override
+  public boolean tickersOnlyOnScriptFrames() {
+    return true;
   }
 
   @Override
@@ -1323,6 +1356,7 @@ public class Battle extends EngineState<Battle> {
     battleState_8006e398.cacheLivingBents();
     this.rotateAndRenderBattleStage();
     this.renderSkybox();
+    this.camera_800c67f0.restoreLogicPose();
   }
 
   /**
@@ -1341,7 +1375,7 @@ public class Battle extends EngineState<Battle> {
       final QueuedSound28 queuedSound = new QueuedSound28();
       queuedSounds_800bd110.add(queuedSound);
 
-      playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, (short)repeatDelay, (short)initialDelay, bent);
+      playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, (short)(repeatDelay * this.tickMultiplier()), (short)(initialDelay * this.tickMultiplier()), bent);
     }
 
     //LAB_80019f9c
@@ -1367,7 +1401,7 @@ public class Battle extends EngineState<Battle> {
     queuedSounds_800bd110.add(queuedSound);
 
     final SoundFile soundFile = bent.soundFile;
-    playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, repeatDelay, initialDelay, bent);
+    playSound(type, soundFile, soundIndex, queuedSound, soundFile.playableSound_10, soundFile.indices_08[soundIndex], 0, (short)-1, (short)-1, (short)-1, (short)(repeatDelay * this.tickMultiplier()), (short)(initialDelay * this.tickMultiplier()), bent);
 
     //LAB_8001a154
   }
@@ -2039,8 +2073,9 @@ public class Battle extends EngineState<Battle> {
       vsyncMode_8007a3b8 = 3;
       battleFlags_800bc960 |= 0x40;
       setProjectionPlaneDistance(320);
+      this.camera_800c67f0.projectionPlaneDistance_100 = 320;
       this.camera_800c67f0.resetCameraMovement();
-      this.encounterIntroFinishedTick = tickCount_800bb0fc + encounter.introWaitTicks;
+      this.encounterIntroFinishedTick = tickCount_800bb0fc + encounter.introWaitTicks * this.tickMultiplier();
       this.loadingStage++;
     }
 
@@ -2417,6 +2452,10 @@ public class Battle extends EngineState<Battle> {
   @Method(0x800c8068L)
   public void fadeOutBattle() {
     if(this.currentPostCombatActionFrame_800c6690 == 0) {
+      if(!SCRIPTS.willTick()) {
+        return;
+      }
+
       postBattleAction_800bc974.onCameraFadeoutStart(this);
 
       //LAB_800c80c8
@@ -2431,7 +2470,9 @@ public class Battle extends EngineState<Battle> {
 
     //LAB_800c81bc
     //LAB_800c81c0
-    this.currentPostCombatActionFrame_800c6690++;
+    if(SCRIPTS.willTick()) {
+      this.currentPostCombatActionFrame_800c6690++;
+    }
 
     if(this.currentPostCombatActionFrame_800c6690 >= postBattleAction_800bc974.getTotalDuration(this) || (PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get()) || PLATFORM.isActionPressed(INPUT_ACTION_MENU_BACK.get())) && this.currentPostCombatActionFrame_800c6690 >= 25) {
       EVENTS.postEvent(new BattleEndedEvent(this, encounter));
@@ -2625,8 +2666,10 @@ public class Battle extends EngineState<Battle> {
           .build();
       }
 
-      this.mcqOffsetX_800c6774 += this.mcqStepX_800c676c;
-      this.mcqOffsetY_800c6778 += this.mcqStepY_800c6770;
+      if(SCRIPTS.willTick()) {
+        this.mcqOffsetX_800c6774 += this.mcqStepX_800c676c;
+        this.mcqOffsetY_800c6778 += this.mcqStepY_800c6770;
+      }
       final int x0 = (this.mcqBaseOffsetX_800c66cc * MathHelper.radToPsxDeg(this.camera_800c67f0.calculateXAngleFromRefpointToViewpoint()) / 0x1000 + this.mcqOffsetX_800c6774) % mcq.screenWidth_14;
       int y = this.mcqOffsetY_800c6778 - MathHelper.radToPsxDeg(MathHelper.floorMod(this.camera_800c67f0.calculateYAngleFromRefpointToViewpoint() + MathHelper.PI, MathHelper.TWO_PI)) + 1888;
 
@@ -8000,12 +8043,14 @@ public class Battle extends EngineState<Battle> {
   @Method(0x800ec51cL)
   public void renderBattleStage(final BattleStage stage) {
     //LAB_800ec548
-    for(int i = 0; i < 10; i++) {
-      if(stage._618[i] != 0) {
-        this.applyBattleStageTextureAnimations(stage, i);
-      }
+    if(SCRIPTS.willTick()) {
+      for(int i = 0; i < 10; i++) {
+        if(stage._618[i] != 0) {
+          this.applyBattleStageTextureAnimations(stage, i);
+        }
 
-      //LAB_800ec560
+        //LAB_800ec560
+      }
     }
 
     tmdGp0Tpage_1f8003ec = 0;

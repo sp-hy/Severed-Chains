@@ -76,7 +76,12 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-
+    if(this.type != 0) {
+      for(int rayNum = 0; rayNum < this.rayCount_04; rayNum++) {
+        final AdditionStarburstEffectRay10 ray = this.rayArray_0c[rayNum];
+        ray.endpointTranslationMagnitude_06 += ray.endpointTranslationMagnitudeVelocity_08;
+      }
+    }
   }
 
   @Override
@@ -193,8 +198,6 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
     //LAB_800d16fc
     for(int rayNum = 0; rayNum < this.rayCount_04; rayNum++) {
       final AdditionStarburstEffectRay10 ray = this.rayArray_0c[rayNum];
-
-      ray.endpointTranslationMagnitude_06 += ray.endpointTranslationMagnitudeVelocity_08;
 
       //LAB_800d1728
       for(int i = 0; i < 4; i++) {

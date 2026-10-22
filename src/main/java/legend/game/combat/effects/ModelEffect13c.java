@@ -14,6 +14,7 @@ import legend.game.types.Model124;
 
 import static legend.core.GameEngine.GTE;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Graphics.GsGetLws;
 import static legend.game.Graphics.GsSetLightMatrix;
@@ -104,12 +105,14 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
 
     //LAB_800dda54
     //LAB_800dda58
-    for(int i = 0; i < 7; i++) {
-      if(model.animateTextures_ec[i]) {
-        animateModelTextures(model, i);
-      }
+    if(SCRIPTS.willTick()) {
+      for(int i = 0; i < 7; i++) {
+        if(model.animateTextures_ec[i]) {
+          animateModelTextures(model, i);
+        }
 
-      //LAB_800dda70
+        //LAB_800dda70
+      }
     }
 
     if(model.shadowType_cc != 0) {

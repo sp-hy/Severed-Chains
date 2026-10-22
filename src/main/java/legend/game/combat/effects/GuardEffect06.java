@@ -39,7 +39,8 @@ public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-
+    this._02++;
+    this._04 += 0x400;
   }
 
   @Override
@@ -51,9 +52,6 @@ public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
     final Vector2f[] pos = new Vector2f[7];
 
     Arrays.setAll(pos, i -> new Vector2f());
-
-    this._02++;
-    this._04 += 0x400;
 
     //LAB_800d2888
     GuardEffectMetrics04 guardEffectMetrics;
