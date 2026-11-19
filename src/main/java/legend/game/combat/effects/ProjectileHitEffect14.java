@@ -12,6 +12,7 @@ import org.joml.Vector3f;
 
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.Battle.seed_800fa754;
 import static legend.game.combat.SEffe.FUN_800cfb14;
 
@@ -50,6 +51,8 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
 
       inst._24[1].y += 25.0f;
       inst._04[1].set(inst._04[0]).add(inst._24[0]);
+      inst.prev_04[0].set(inst._04[0]);
+      inst.prev_04[1].set(inst._04[1]);
       inst.fadeR_3a = inst.r_34 / inst.frames_44;
       inst.fadeG_3c = inst.g_36 / inst.frames_44;
       inst.fadeB_3e = inst.b_38 / inst.frames_44;
@@ -58,7 +61,48 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
+    final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
 
+    //LAB_800d01ec
+    for(int i = 0; i < this.count_00; i++) {
+      final ProjectileHitEffectInstance48 s4 = this.instances[i];
+
+      if(s4.used_00) {
+        if(s4.frames_44 == 0) {
+          s4.used_00 = false;
+          continue;
+        }
+
+        s4._40++;
+        s4.frames_44--;
+
+        //LAB_800d0220
+        s4.r_34 -= s4.fadeR_3a;
+        s4.g_36 -= s4.fadeG_3c;
+        s4.b_38 -= s4.fadeB_3e;
+
+        //LAB_800d0254
+        for(int s3 = 0; s3 < 2; s3++) {
+          final Vector3f s1 = s4._04[s3];
+          final Vector3f a1 = s4._24[s3];
+          s4.prev_04[s3].set(s1);
+          s1.add(a1);
+          a1.y += 25.0f;
+
+          if(a1.x > 10.0f) {
+            a1.x -= 10.0f;
+          }
+
+          //LAB_800d0308
+          if(s1.y + manager.params_10.trans_04.y >= 0) {
+            s1.y = -manager.params_10.trans_04.y;
+            a1.y = -a1.y;
+          }
+
+          //LAB_800d033c
+        }
+      }
+    }
   }
 
   @Override
@@ -77,6 +121,8 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
         .build();
     }
 
+    final float alpha = SCRIPTS.getInterpAlpha();
+    final Vector3f visualPos = new Vector3f();
     float a0 = 0.0f;
 
     //LAB_800d01ec
@@ -84,36 +130,12 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
       final ProjectileHitEffectInstance48 s4 = this.instances[i];
 
       if(s4.used_00) {
-        s4._40++;
-        s4.frames_44--;
-
-        if(s4.frames_44 == 0) {
-          s4.used_00 = false;
-        }
-
-        //LAB_800d0220
-        s4.r_34 -= s4.fadeR_3a;
-        s4.g_36 -= s4.fadeG_3c;
-        s4.b_38 -= s4.fadeB_3e;
-
         //LAB_800d0254
         final Vector2f[] screenVert = {new Vector2f(), new Vector2f()};
         for(int s3 = 0; s3 < 2; s3++) {
-          final Vector3f s1 = s4._04[s3];
-          final Vector3f a1 = s4._24[s3];
-          a0 = FUN_800cfb14(manager, s1, screenVert[s3]);
-          s1.add(a1);
-          a1.y += 25.0f;
-
-          if(a1.x > 10.0f) {
-            a1.x -= 10.0f;
-          }
-
-          //LAB_800d0308
-          if(s1.y + manager.params_10.trans_04.y >= 0) {
-            s1.y = -manager.params_10.trans_04.y;
-            a1.y = -a1.y;
-          }
+          // Retail drew the pre-move position; lerp from it towards this tick's position
+          s4.prev_04[s3].lerp(s4._04[s3], alpha, visualPos);
+          a0 = FUN_800cfb14(manager, visualPos, screenVert[s3]);
 
           //LAB_800d033c
         }
@@ -135,7 +157,7 @@ public class ProjectileHitEffect14 implements Effect<EffectManagerParams.VoidTyp
             //LAB_800d0444
             RENDERER.queueLine(this.obj, this.transforms, s1_0 + a2_0, screenVert[0], screenVert[1])
               .translucency(Translucency.B_PLUS_F)
-              .colour((s4.r_34 >>> 8) / 255.0f, (s4.g_36 >>> 8) / 255.0f, (s4.b_38 >>> 8) / 255.0f)
+              .colour((s4.r_34 - s4.fadeR_3a * alpha) / 256.0f / 255.0f, (s4.g_36 - s4.fadeG_3c * alpha) / 256.0f / 255.0f, (s4.b_38 - s4.fadeB_3e * alpha) / 256.0f / 255.0f)
               .screenspaceOffset(GPU.getOffsetX(), GPU.getOffsetY());
           }
 

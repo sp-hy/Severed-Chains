@@ -109,7 +109,7 @@ public class DeffTmdRenderer14 implements Effect<EffectManagerParams.AnimType> {
           .backgroundColour(GTE.backgroundColour)
           .ctmdFlags(0x20 | ((dobj2.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0))
           .tmdTranslucency(tmdGp0Tpage_1f8003ec >>> 5 & 0b11)
-          .battleColour(((Battle)currentEngineState_8004dd04)._800c6930.colour_00);
+          .battleColour(((Battle)currentEngineState_8004dd04).getRenderBattleColour());
       } else {
         //LAB_80118370
         renderTmdSpriteEffect(this.tmd_08, this.tmd_08.getObj(), manager.params_10, this.transforms);

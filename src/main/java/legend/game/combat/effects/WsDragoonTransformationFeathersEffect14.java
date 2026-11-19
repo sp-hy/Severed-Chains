@@ -8,6 +8,8 @@ import org.joml.Vector3f;
 import java.util.Arrays;
 import java.util.function.BiConsumer;
 
+import static legend.core.GameEngine.SCRIPTS;
+
 public class WsDragoonTransformationFeathersEffect14 implements Effect<EffectManagerParams.VoidType> {
   /** ushort */
   public final int count_00;
@@ -35,6 +37,8 @@ public class WsDragoonTransformationFeathersEffect14 implements Effect<EffectMan
     //LAB_8010f9c0
     for(int i = 0; i < this.count_00; i++) {
       final WsDragoonTransformationFeatherInstance70 feather = this.featherArray_10[i];
+      feather.prevTranslation.set(feather.translation_08);
+      feather.hasPrevTranslation = true;
       this.WsDragoonTransformationFeatherCallbacks_80119ff4[feather.callbackIndex_02].accept(manager, feather);
     }
 
@@ -48,6 +52,7 @@ public class WsDragoonTransformationFeathersEffect14 implements Effect<EffectMan
     final GenericSpriteEffect24 spriteEffect = new GenericSpriteEffect24(manager.params_10.flags_00, -this.width_0a / 2, -this.height_0c / 2, this.width_0a, this.height_0c, (this.v_08 & 0x100) >>> 4 | (this.u_06 & 0x3ff) >>> 6, this.clut_0e << 4 & 0x3ff, this.clut_0e >>> 6 & 0x1ff, (this.u_06 & 0x3f) * 4, this.v_08);
 
     final Vector3f translation = new Vector3f();
+    final float alpha = SCRIPTS.getInterpAlpha();
 
     //LAB_8010d6c8
     for(int i = 0; i < this.count_00; i++) {
@@ -69,7 +74,11 @@ public class WsDragoonTransformationFeathersEffect14 implements Effect<EffectMan
         spriteEffect.scaleX_1c = manager.params_10.scale_16.x;
         spriteEffect.scaleY_1e = manager.params_10.scale_16.y;
         spriteEffect.angle_20 = feather.spriteAngle_6e;
-        translation.set(feather.translation_08).add(manager.params_10.trans_04);
+        if(feather.hasPrevTranslation) {
+          feather.prevTranslation.lerp(feather.translation_08, alpha, translation).add(manager.params_10.trans_04);
+        } else {
+          translation.set(feather.translation_08).add(manager.params_10.trans_04);
+        }
         spriteEffect.render(translation);
         spriteEffect.delete();
       }

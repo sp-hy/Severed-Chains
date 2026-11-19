@@ -9,6 +9,8 @@ public class ProjectileHitEffectInstance48 {
 
   public final Vector3f[] _04 = new Vector3f[16];
   public final Vector3f[] _24 = new Vector3f[8];
+  /** {@link #_04} from before the latest 20 Hz tick, for display interpolation */
+  public final Vector3f[] prev_04 = new Vector3f[2];
   public int r_34;
   public int g_36;
   public int b_38;
@@ -26,5 +28,6 @@ public class ProjectileHitEffectInstance48 {
   public ProjectileHitEffectInstance48() {
     Arrays.setAll(this._04, i -> new Vector3f());
     Arrays.setAll(this._24, i -> new Vector3f());
+    Arrays.setAll(this.prev_04, i -> new Vector3f());
   }
 }

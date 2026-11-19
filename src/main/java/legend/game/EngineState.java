@@ -17,10 +17,13 @@ import javax.annotation.Nullable;
 import java.util.function.Function;
 
 import static legend.core.GameEngine.PLATFORM;
+import static legend.core.GameEngine.SCRIPTS;
+import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.SItem.chapterNames_80114248;
 import static legend.game.SItem.worldMapNames_8011c1ec;
 import static legend.game.Scus94491BpeSegment_800b.continentIndex_800bf0b0;
 import static legend.game.Scus94491BpeSegment_800b.submapId_800bd808;
+import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.sound.Audio.sssqResetStuff;
 import static legend.lodmod.LodMod.INPUT_ACTION_GENERAL_MOVE_DOWN;
 import static legend.lodmod.LodMod.INPUT_ACTION_GENERAL_MOVE_LEFT;
@@ -88,6 +91,47 @@ public abstract class EngineState<T extends EngineState<T>> {
   /** The amount we've multiplied this engine state's frame rate by (e.g. world map was 20FPS, we multiplied it by 3 to bring it to 60FPS) */
   public int tickMultiplier() {
     return 2;
+  }
+
+  /**
+   * Target display frame rate. Battle presents at the monitor's refresh rate while its logic runs at a fixed rate in
+   * real time (see {@link legend.game.scripting.ScriptManager#setFixedTickRate(int)}).
+   */
+  public int getTargetFps() {
+    return 60 / Math.max(1, vsyncMode_8007a3b8);
+  }
+
+  /**
+   * If true, this engine state keeps simulating at {@link #getTargetFps()} but is presented at the display's refresh
+   * rate, with the renderer interpolating everything it draws between simulation steps (see
+   * {@link legend.core.renderer.RenderEngine#setFrameInterpolation}). Engine states that already decouple rendering
+   * themselves (battle) turn this off.
+   */
+  public boolean interpolateFrames() {
+    return true;
+  }
+
+  /**
+   * If true, script tickers only run on script frames (see {@link legend.game.scripting.ScriptManager#setFramesPerTick(int)}).
+   * Renderers still run every display frame so visuals can interpolate.
+   */
+  public boolean tickersOnlyOnScriptFrames() {
+    return false;
+  }
+
+  /**
+   * {@link legend.game.Scus94491BpeSegment_800b#tickCount_800bb0fc} counts frames (or sub-ticks when the script engine
+   * runs at a fixed rate), {@link #tickMultiplier()} per logic tick. This is the number of logic ticks, for visual
+   * clocks (blinking, cycling arrows, etc.) that were authored against the original frame rate.
+   */
+  public int logicTickCount() {
+    return tickCount_800bb0fc / Math.max(1, this.tickMultiplier());
+  }
+
+  /** Maps a 20 Hz animation tick onto the current display frame so DEFF/CMB/LMB poses can interpolate. */
+  public int animationDisplayTicks(final int logicTicks) {
+    final int multiplier = Math.max(1, this.tickMultiplier());
+    return logicTicks * multiplier + (int)(SCRIPTS.getInterpAlpha() * multiplier);
   }
 
   public void menuClosed() {

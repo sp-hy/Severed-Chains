@@ -11,6 +11,9 @@ public class GoldDragoonTransformEffectInstance84 {
   public final Vector3f transStep_28 = new Vector3f();
   public final Vector3f rot_38 = new Vector3f();
   public final Vector3f rotStep_48 = new Vector3f();
+  /** {@link #trans_08}/{@link #rot_38} before the latest logic tick, for display interpolation */
+  public final Vector3f prevTrans = new Vector3f();
+  public final Vector3f prevRot = new Vector3f();
   // /** Unused, set to 0x7f, might have been colours at one point */
   //public byte _68;
   //public byte _69;

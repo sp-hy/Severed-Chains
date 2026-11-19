@@ -3,7 +3,9 @@ package legend.game.scripting;
 import com.opencsv.exceptions.CsvException;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import legend.core.Config;
 import legend.core.QueuePool;
+import legend.game.combat.types.BattleObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.Marker;
@@ -29,6 +31,7 @@ import java.util.function.Function;
 
 import static legend.core.GameEngine.SCRIPTS;
 import static legend.core.IoHelper.intsToBytes;
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.scripting.ScriptState.FLAG_1_0000;
 import static legend.game.scripting.ScriptState.FLAG_DESTRUCTOR_NOT_SET;
 import static legend.game.scripting.ScriptState.FLAG_FILE_NOT_SET;
@@ -184,10 +187,24 @@ public class ScriptManager {
   private boolean paused;
   private int upperBound;
 
-  private int framesPerTick;
+  private static final int MAX_TICK_BACKLOG = 2;
+
+  private int framesPerTick = 1;
   private int currentTicks;
 
+  /** Logic ticks per second when decoupled from the display rate, or 0 to tick on display frames */
+  private int fixedTickRate;
+  private long lastFrameNanos;
+  private long accumulatorNanos;
+  private long logicTicks;
+  private long subTick;
+
+  private boolean tickThisFrame = true;
+  private float interpAlpha = 1.0f;
+  private int subTicksThisFrame = 1;
+
   private final ScriptState<?>[] scriptStatePtrArr_800bc1c0 = new ScriptState[108];
+  private final List<BattleObject> interpolatedObjects = new ArrayList<>();
 
   public ScriptManager(final List<Path> includePaths, final Path patchDir) {
     this.includePaths = includePaths;
@@ -197,29 +214,113 @@ public class ScriptManager {
     this.paramPool.addType(ScriptStorageParam.class, () -> new ScriptStorageParam(this.paramPool));
   }
 
+  /**
+   * Starts a display frame. Decides whether the script engine ticks this frame and how far between logic
+   * ticks we are. Must be called once at the start of every frame, before anything queries {@link #willTick()}.
+   */
+  public void beginFrame() {
+    if(this.fixedTickRate <= 0) {
+      // Frame-locked: tick every N display frames
+      this.tickThisFrame = this.currentTicks == 0;
+      this.interpAlpha = this.framesPerTick <= 1 ? 1.0f : this.currentTicks / (float)this.framesPerTick;
+      this.subTicksThisFrame = 1;
+      this.currentTicks = (this.currentTicks + 1) % Math.max(1, this.framesPerTick);
+      return;
+    }
+
+    // Real-time: logic ticks at a fixed rate regardless of how fast we're presenting frames
+    final long now = System.nanoTime();
+    final long tickNanos = 1_000_000_000L / ((long)this.fixedTickRate * Config.getGameSpeedMultiplier());
+
+    if(this.lastFrameNanos == 0) {
+      // First frame - tick immediately
+      this.accumulatorNanos = tickNanos;
+    } else {
+      this.accumulatorNanos += now - this.lastFrameNanos;
+    }
+
+    this.lastFrameNanos = now;
+
+    // Only one logic tick can run per frame, so don't let a hitch (or a pause in the debugger) build up a
+    // backlog that we'd spend the next several seconds catching up on
+    this.accumulatorNanos = Math.min(this.accumulatorNanos, tickNanos * MAX_TICK_BACKLOG);
+
+    this.tickThisFrame = this.accumulatorNanos >= tickNanos;
+
+    if(this.tickThisFrame) {
+      this.accumulatorNanos -= tickNanos;
+      this.logicTicks++;
+    }
+
+    this.interpAlpha = Math.clamp(this.accumulatorNanos / (float)tickNanos, 0.0f, 1.0f);
+
+    // Sub-ticks give legacy per-frame counters a stable clock that stays locked to logic ticks
+    final int subTicksPerTick = Math.max(1, this.framesPerTick);
+    final long subTick = this.logicTicks * subTicksPerTick + Math.min(subTicksPerTick - 1, (int)(this.interpAlpha * subTicksPerTick));
+    this.subTicksThisFrame = (int)Math.max(0, subTick - this.subTick);
+    this.subTick = subTick;
+  }
+
+  /** True if the script engine will tick (or has ticked) this frame */
   public boolean willTick() {
-    return this.currentTicks == 0;
+    return this.tickThisFrame;
   }
 
   public boolean tick() {
-    boolean ticked = false;
+    final boolean ticked = this.tickThisFrame;
 
-    if(this.currentTicks == 0) {
+    if(ticked) {
       this.executeScriptFrame();
-      ticked = true;
     }
 
     this.executeScriptTickers(ticked);
     this.upperBound = 9;
     this.executeScriptRenderers(ticked);
 
-    this.currentTicks = (this.currentTicks + 1) % this.framesPerTick;
     return ticked;
   }
 
-  /** When running at higher frame rates, the number of frames to wait before ticking the script engine */
+  /**
+   * When running at higher frame rates, the number of frames to wait before ticking the script engine. When a
+   * {@link #setFixedTickRate fixed tick rate} is set, this is instead the number of sub-ticks per logic tick.
+   */
   public void setFramesPerTick(final int ticks) {
     this.framesPerTick = ticks;
+  }
+
+  /**
+   * Run the script engine at a fixed rate in real time, decoupled from the display frame rate. Pass 0 to go back
+   * to ticking on display frames (see {@link #setFramesPerTick}).
+   */
+  public void setFixedTickRate(final int ticksPerSecond) {
+    this.fixedTickRate = ticksPerSecond;
+    this.lastFrameNanos = 0;
+    this.accumulatorNanos = 0;
+    this.logicTicks = 0;
+    this.subTick = 0;
+    this.currentTicks = 0;
+  }
+
+  public boolean hasFixedTickRate() {
+    return this.fixedTickRate > 0;
+  }
+
+  public int getFixedTickRate() {
+    return this.fixedTickRate;
+  }
+
+  /** 0 on a logic/script frame, approaching 1 across the in-between display frames. */
+  public float getInterpAlpha() {
+    return this.interpAlpha;
+  }
+
+  /**
+   * How many sub-ticks ({@link #setFramesPerTick frames per tick} per logic tick) elapsed this frame. Always 1 when
+   * frame-locked. With a fixed tick rate this may be 0 or more than 1 depending on how fast frames are presented,
+   * but always totals exactly frames-per-tick per logic tick.
+   */
+  public int getSubTicksThisFrame() {
+    return this.subTicksThisFrame;
   }
 
   /** Stops the script engine (will not render) */
@@ -367,6 +468,10 @@ public class ScriptManager {
       return;
     }
 
+    if(!isScriptFrame && currentEngineState_8004dd04 != null && currentEngineState_8004dd04.tickersOnlyOnScriptFrames()) {
+      return;
+    }
+
     //LAB_80017750
     for(int i = 0; i < this.scriptStatePtrArr_800bc1c0.length; i++) {
       final ScriptState<?> scriptState = this.scriptStatePtrArr_800bc1c0[i];
@@ -403,12 +508,37 @@ public class ScriptManager {
       return;
     }
 
+    // Move every battle object to its interpolated (between logic ticks) transform for the whole pass, so renderers
+    // that read other objects' transforms (e.g. effects attached to a moving parent) see interpolated values too
+    this.interpolatedObjects.clear();
+    for(int i = 0; i < this.scriptStatePtrArr_800bc1c0.length; i++) {
+      final ScriptState<?> scriptState = this.scriptStatePtrArr_800bc1c0[i];
+      if(scriptState != null && scriptState.innerStruct_00 instanceof final BattleObject bobj) {
+        bobj.applyVisualInterpolation();
+        this.interpolatedObjects.add(bobj);
+      }
+    }
+
+    try {
+      this.renderAll();
+    } finally {
+      // Put the logic transforms back so scripts and tickers never see interpolated values
+      for(int i = 0; i < this.interpolatedObjects.size(); i++) {
+        this.interpolatedObjects.get(i).restoreLogicTransform();
+      }
+
+      this.interpolatedObjects.clear();
+    }
+  }
+
+  private void renderAll() {
     //LAB_80017854
     for(int i = 0; i < this.scriptStatePtrArr_800bc1c0.length; i++) {
       final ScriptState<?> scriptState = this.scriptStatePtrArr_800bc1c0[i];
-      // hasExecuted - script has already had a chance to run some of its code, so we can start ticking/rendering
-      // isScriptFrame - some effects allocate other effects and expect them to tick/render once they finish (#1530)
-      if(scriptState != null && (scriptState.hasExecuted() || isScriptFrame)) {
+      // Render every display frame, including the frame a script is allocated, so
+      // short-lived HUD (addition names, SP text) does not flicker at 20 Hz.
+      // Tickers still wait for hasExecuted || isScriptFrame (#1530).
+      if(scriptState != null) {
         try {
           scriptState.render();
         } catch(final Throwable t) {

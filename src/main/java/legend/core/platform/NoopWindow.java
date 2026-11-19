@@ -143,8 +143,16 @@ public class NoopWindow extends Window {
     return this.render.getExpectedFps();
   }
 
+  @Override
+  public float getRefreshRate() {
+    return 60.0f;
+  }
+
   private void tick() {
     this.events().onDraw();
-    this.manager.clearPressed();
+
+    if(this.shouldClearPressedInput()) {
+      this.manager.clearPressed();
+    }
   }
 }

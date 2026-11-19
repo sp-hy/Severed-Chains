@@ -142,13 +142,31 @@ public final class Scus94491BpeSegment {
 
     GPU.startFrame();
 
+    SCRIPTS.beginFrame();
+
     if(currentEngineState_8004dd04 != null && currentEngineState_8004dd04.advancesTime()) {
-      gameState_800babc8.timestamp_a0 += vsyncMode_8007a3b8;
+      if(SCRIPTS.hasFixedTickRate()) {
+        // Logic is decoupled from the display rate, so count play time in logic ticks
+        if(SCRIPTS.willTick()) {
+          gameState_800babc8.timestamp_a0 += Math.max(1, 60 / SCRIPTS.getFixedTickRate());
+        }
+      } else {
+        gameState_800babc8.timestamp_a0 += Math.max(1, 60 / currentEngineState_8004dd04.getTargetFps());
+      }
     }
 
-    final int frames = Math.max(1, vsyncMode_8007a3b8);
-    final int hz = 60 / frames * Config.getGameSpeedMultiplier();
-    RENDERER.window().setFpsLimit(hz);
+    final int hz;
+    if(currentEngineState_8004dd04 != null) {
+      hz = Math.max(1, currentEngineState_8004dd04.getTargetFps()) * Config.getGameSpeedMultiplier();
+    } else {
+      hz = 60 / Math.max(1, vsyncMode_8007a3b8) * Config.getGameSpeedMultiplier();
+    }
+    // Engine states that simulate at a fixed per-frame rate can still be presented at the display's refresh rate by
+    // having the renderer interpolate between simulation steps
+    final int refreshRate = Math.round(RENDERER.window().getRefreshRate());
+    final boolean interpolate = currentEngineState_8004dd04 != null && currentEngineState_8004dd04.interpolateFrames() && !SCRIPTS.hasFixedTickRate() && refreshRate > hz;
+    RENDERER.setFrameInterpolation(interpolate, hz);
+    RENDERER.window().setFpsLimit(interpolate ? refreshRate : hz);
     PLATFORM.setInputTickRate(hz);
 
     loadQueuedOverlay();
@@ -177,8 +195,12 @@ public final class Scus94491BpeSegment {
     // SPU stuff
     startQueuedSounds();
 
-    // Textboxes
-    handleTextboxAndText();
+    // Textboxes - their timers count frames (tickMultiplier per logic tick), so with a fixed logic rate step them once
+    // per elapsed sub-tick rather than once per display frame. Rendering still happens every frame.
+    for(int i = 0; i < SCRIPTS.getSubTicksThisFrame(); i++) {
+      handleTextboxAndText();
+    }
+
     renderTextboxes();
 
     if(currentEngineState_8004dd04 != null) {
@@ -186,7 +208,8 @@ public final class Scus94491BpeSegment {
     }
 
     FUN_80020ed8();
-    tickCount_800bb0fc++;
+    // One per frame normally. With a fixed logic rate this stays locked to logic ticks (tickMultiplier per tick) regardless of display rate
+    tickCount_800bb0fc += SCRIPTS.getSubTicksThisFrame();
 
     GPU.endFrame();
 

@@ -14,6 +14,7 @@ import javax.annotation.Nullable;
 
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.SEffe.FUN_800cfc20;
 
 public class PixelParticle extends ParticleEffectData98 {
@@ -34,23 +35,28 @@ public class PixelParticle extends ParticleEffectData98 {
   }
 
   @Override
+  protected void tickInstance(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectInstance94 inst) {
+    inst.beforeRender(manager);
+    inst.tickAttributes(manager, inst.colour);
+  }
+
+  @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
     final EffectManagerData6c<EffectManagerParams.ParticleType> manager = state.innerStruct_00;
-    this.countFramesRendered_52++;
+    final float alpha = SCRIPTS.getInterpAlpha();
 
     //LAB_800fde38
     for(int i = 0; i < this.countParticleInstance_50; i++) {
       final ParticleEffectInstance94 inst = this.particleArray_68[i];
 
-      if(inst.tick(manager)) {
-        inst.beforeRender(manager);
+      // Simulation happens on logic ticks, see tickInstance
+      if(inst.visible) {
+        inst.interpolateVisuals(alpha);
 
-        final Vector3f colour = new Vector3f();
-        inst.tickAttributes(manager, colour);
-
+        final Vector3f colour = inst.renderColour;
         final Vector2f ref = new Vector2f();
 
-        float z = FUN_800cfc20(inst.managerRotation_68, inst.managerTranslation_2c, inst.particlePosition_50, ref) / 4.0f;
+        float z = FUN_800cfc20(inst.managerRotation_68, inst.managerTranslation_2c, inst.renderPosition, ref) / 4.0f;
         final float zCombined = z + manager.params_10.z_22;
         if(zCombined >= 0xa0) {
           if(zCombined >= 0xffe) {
@@ -67,9 +73,7 @@ public class PixelParticle extends ParticleEffectData98 {
     }
 
     //LAB_800fdfe8
-    if(this.scaleOrUseEffectAcceleration_6c) {
-      this.effectAcceleration_70.mul(this.scaleParticleAcceleration_80);
-    }
+    // Effect acceleration is scaled on logic ticks, see ParticleEffectData98#tick
 
     //LAB_800fe044
   }

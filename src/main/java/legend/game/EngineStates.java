@@ -74,6 +74,9 @@ public final class EngineStates {
       return;
     }
 
+    // New engine states tick on display frames unless they opt in to a fixed logic rate in init
+    SCRIPTS.setFixedTickRate(0);
+
     Obj.clearObjList(false);
     Texture.clearTextureList(false);
 

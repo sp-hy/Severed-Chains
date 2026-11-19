@@ -6,6 +6,7 @@ import legend.game.combat.bent.BattleEntity27c;
 import legend.game.scripting.ScriptState;
 import org.joml.Vector3f;
 
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.Battle.seed_800fa754;
 import static legend.game.combat.SEffe.calculateBentPartPosition;
 
@@ -40,17 +41,21 @@ public class MonsterDeathEffect34 implements Effect<EffectManagerParams.VoidType
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
     final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
 
+    // Values below have already been stepped by the ticker this logic tick, step back to interpolate from the previous tick
+    final float back = 1.0f - SCRIPTS.getInterpAlpha();
+
     //LAB_800d30fc
     for(int objIndex = 0; objIndex < this.modelObjectCount_04; objIndex++) {
       final MonsterDeathEffectObjectDestructor30 obj = this.objectDestructorArray_30[objIndex];
 
       if(obj.destructionState_00 == 1) {
-        this.sprite_0c.r_14 = obj.r_24 >>> 8;
-        this.sprite_0c.g_15 = obj.g_26 >>> 8;
-        this.sprite_0c.b_16 = obj.b_28 >>> 8;
-        this.sprite_0c.angle_20 = obj.angleModifier_0c;
-        this.sprite_0c.scaleX_1c = manager.params_10.scale_16.x + obj.scaleModifier_04;
-        this.sprite_0c.scaleY_1e = manager.params_10.scale_16.y + obj.scaleModifier_04;
+        final float scaleModifier = obj.scaleModifier_04 - obj.scaleModifierVelocity_08 * back;
+        this.sprite_0c.r_14 = (int)((obj.r_24 + obj.stepR_2a * back) / 256.0f);
+        this.sprite_0c.g_15 = (int)((obj.g_26 + obj.stepG_2c * back) / 256.0f);
+        this.sprite_0c.b_16 = (int)((obj.b_28 + obj.stepB_2e * back) / 256.0f);
+        this.sprite_0c.angle_20 = obj.angleModifier_0c - obj.angleModifierVelocity_10 * back;
+        this.sprite_0c.scaleX_1c = manager.params_10.scale_16.x + scaleModifier;
+        this.sprite_0c.scaleY_1e = manager.params_10.scale_16.y + scaleModifier;
         this.sprite_0c.render(obj.translation_14);
       }
       //LAB_800d3174

@@ -20,6 +20,7 @@ import java.util.function.Consumer;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.displayHeight_1f8003e4;
 import static legend.game.Graphics.displayWidth_1f8003e0;
 
@@ -28,6 +29,9 @@ public class ScreenDistortionEffectData08 implements Effect<EffectManagerParams.
 
   public float angle_00;
   public float angleStep_04;
+  /** {@link #angle_00} before the latest logic tick, for display interpolation */
+  private float previousAngle;
+  private boolean ticked;
 
   public final MV transforms = new MV();
 
@@ -35,16 +39,14 @@ public class ScreenDistortionEffectData08 implements Effect<EffectManagerParams.
     this.type = type;
   }
 
-  /** Ticker and renderer are swapped */
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-    this.screenDistortionEffectRenderers_80119fd4[this.type].accept(state);
+    this.screenDistortionEffectTickers_80119fe0[this.type].accept(state);
   }
 
-  /** Ticker and renderer are swapped */
   @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-    this.screenDistortionEffectTickers_80119fe0[this.type].accept(state);
+    this.screenDistortionEffectRenderers_80119fd4[this.type].accept(state);
   }
 
   @Override
@@ -61,6 +63,7 @@ public class ScreenDistortionEffectData08 implements Effect<EffectManagerParams.
     final float multiplierX = (int)(manager.params_10.scale_16.x * 0x1000) >> 8;
     final float multiplierHeight = (int)(manager.params_10.scale_16.y * 0x1000) >> 11;
     final float rowLimit = (int)(manager.params_10.scale_16.z * 0x1000) * 15 >> 9;
+    final float baseAngle = this.ticked ? Math.lerp(this.previousAngle, this.angle_00, SCRIPTS.getInterpAlpha()) : this.angle_00;
 
     final boolean widescreen = RENDERER.getRenderMode() == EngineState.RenderMode.PERSPECTIVE && CONFIG.getConfig(CoreMod.ALLOW_WIDESCREEN_CONFIG.get());
     final float fullWidth;
@@ -81,8 +84,8 @@ public class ScreenDistortionEffectData08 implements Effect<EffectManagerParams.
     //LAB_801093f0
     // whichHalf: 1 = bottom, -1 = top
     for(int whichHalf = 1; whichHalf >= -1; whichHalf -= 2) {
-      float angle1 = this.angle_00;
-      float angle2 = this.angle_00;
+      float angle1 = baseAngle;
+      float angle2 = baseAngle;
       float rowOffset = whichHalf == 1 ? 0.0f : -1.0f;
       int v = whichHalf == 1 ? 120 : 119;
 
@@ -164,6 +167,8 @@ public class ScreenDistortionEffectData08 implements Effect<EffectManagerParams.
 
   @Method(0x80109a4cL)
   private void tickScreenDistortionWaveEffect(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
+    this.previousAngle = this.angle_00;
+    this.ticked = true;
     this.angle_00 += this.angleStep_04;
   }
 

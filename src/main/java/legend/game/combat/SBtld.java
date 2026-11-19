@@ -23,6 +23,7 @@ import java.util.Iterator;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.REGISTRIES;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.FullScreenEffects.startFadeEffect;
 import static legend.game.Graphics.clearBlue_800babc0;
 import static legend.game.Graphics.clearGreen_800bb104;
@@ -72,16 +73,23 @@ public final class SBtld {
   public static void drawBattleReportOverlays() {
     final int[] cluts = {0x42, 0x43};
 
+    // This is drawn every display frame, but the animation was authored for the 20 Hz battle frame rate. When logic is
+    // decoupled from the display rate, only advance it on logic ticks.
+    final boolean tick = !SCRIPTS.hasFixedTickRate() || SCRIPTS.willTick();
+
     final Iterator<BattleReportOverlayList10> it = battleReportOverlayLists_8004f658.iterator();
 
     //LAB_80018f04
     while(it.hasNext()) {
       final BattleReportOverlayList10 current = it.next();
-      current.ticksRemaining_03--;
 
-      if(current.ticksRemaining_03 == 0) {
-        it.remove();
-        continue;
+      if(tick) {
+        current.ticksRemaining_03--;
+
+        if(current.ticksRemaining_03 == 0) {
+          it.remove();
+          continue;
+        }
       }
 
       //LAB_80018fd0
@@ -89,9 +97,16 @@ public final class SBtld {
       for(int overlayIndex = 0; overlayIndex < current.overlays_04.length; overlayIndex++) {
         final BattleReportOverlay0e overlay = current.overlays_04[overlayIndex];
 
-        overlay.negaticks_08++;
+        if(tick) {
+          overlay.negaticks_08++;
+        }
 
         if(overlay.negaticks_08 >= 0) {
+          if(!tick) {
+            battleUiParts.queueLevelUp(overlay);
+            continue;
+          }
+
           if(overlay.state_0d == 0) {
             //LAB_80019040
             overlay._09--;
@@ -192,7 +207,45 @@ public final class SBtld {
       return;
     }
 
-    renderCombatDissolveEffect();
+    // Retail runs the transition at vsyncMode_8007a3b8 (60 Hz, it's set to 1 in clearCombatVars). When logic is
+    // decoupled from the display rate, step it on a clock derived from the logic ticks so it plays at the same
+    // speed regardless of the display rate (may be 0 or several steps on a given frame).
+    final int steps = getTransitionStepsThisFrame();
+
+    for(int step = 0; step < steps && _8004f6e4 != -1; step++) {
+      tickTransitionIntoBattle();
+    }
+
+    renderCombatDissolveEffect(steps);
+  }
+
+  /** Total transition steps elapsed, see {@link #getTransitionStepsThisFrame} */
+  private static long transitionSteps;
+  /** Logic ticks elapsed since the transition started */
+  private static long transitionLogicTicks;
+
+  private static int getTransitionStepsThisFrame() {
+    if(!SCRIPTS.hasFixedTickRate()) {
+      return 1;
+    }
+
+    if(SCRIPTS.willTick()) {
+      transitionLogicTicks++;
+    }
+
+    final int stepsPerTick = Math.max(1, 60 / Math.max(1, vsyncMode_8007a3b8) / SCRIPTS.getFixedTickRate());
+    final long steps = transitionLogicTicks * stepsPerTick + Math.min(stepsPerTick - 1, (int)(SCRIPTS.getInterpAlpha() * stepsPerTick));
+    final int stepsThisFrame = (int)Math.max(0, steps - transitionSteps);
+    transitionSteps = Math.max(transitionSteps, steps);
+    return stepsThisFrame;
+  }
+
+  private static void tickTransitionIntoBattle() {
+    battleDissolveTicks += vsyncMode_8007a3b8;
+
+    if(isDissolveVisible()) {
+      tickCombatDissolveEffect();
+    }
 
     if(_800bd740 >= 0) {
       _800bd740--;
@@ -232,13 +285,40 @@ public final class SBtld {
     //LAB_8001b53c
   }
 
+  /** Squares are drawn every other frame (it flickers) unless reduce motion is on */
+  private static boolean isDissolveVisible() {
+    return !CONFIG.getConfig(REDUCE_MOTION_FLASHING_CONFIG.get()) && ((battleDissolveTicks & 0x1) == 0 || CONFIG.getConfig(BATTLE_TRANSITION_MODE_CONFIG.get()) == BattleTransitionMode.FAST);
+  }
+
+  /** Advances the dissolve by one row iteration. Retail did this as part of rendering, once per visible frame. */
+  private static void tickCombatDissolveEffect() {
+    final int numberOfBlocksY = displayHeight_1f8003e4 / 8;
+    final int blockHeight = 100 / numberOfBlocksY;
+
+    if(blockHeight == dissolveIterationsPerformed_800bd714) {
+      dissolveIterationsPerformed_800bd714 = 0;
+      dissolveRowCount_800bd710++;
+
+      if(dissolveRowCount_800bd710 > numberOfBlocksY) {
+        dissolveRowCount_800bd710 = numberOfBlocksY;
+      }
+    }
+
+    dissolveIterationsPerformed_800bd714++;
+    dissolveJitterStale = true;
+  }
+
   /** To determine if we need to rebuild the quad because the UVs changed */
   private static float dissolveDisplayWidth;
   private static Obj dissolveSquare;
   private static final MV dissolveTransforms = new MV();
 
+  /** Per-square jitter, re-rolled each time the dissolve advances rather than every display frame */
+  private static int[] dissolveJitter = new int[0];
+  private static boolean dissolveJitterStale = true;
+
   @Method(0x8001b54cL)
-  public static void renderCombatDissolveEffect() {
+  public static void renderCombatDissolveEffect(final int steps) {
     if(dissolveSquare == null) {
       dissolveSquare = new QuadBuilder("Dissolve Square")
         .bpp(Bpp.BITS_24)
@@ -251,9 +331,8 @@ public final class SBtld {
       dissolveSquare.persistent = true;
     }
 
-    battleDissolveTicks += vsyncMode_8007a3b8;
-
-    if(!CONFIG.getConfig(REDUCE_MOTION_FLASHING_CONFIG.get()) && ((battleDissolveTicks & 0x1) == 0 || CONFIG.getConfig(BATTLE_TRANSITION_MODE_CONFIG.get()) == BattleTransitionMode.FAST)) {
+    // battleDissolveTicks and the row/iteration counters are advanced in tickTransitionIntoBattle
+    if(isDissolveVisible()) {
       final float squish;
       final float width;
       final float offset;
@@ -269,16 +348,27 @@ public final class SBtld {
         offset = width - 320.0f;
       }
 
-      final int numberOfBlocksY = displayHeight_1f8003e4 / 8;
-      final int blockHeight = 100 / numberOfBlocksY;
+      final int cols = (int)Math.ceil(width * squish / 32 * 4);
+      final int jitterCount = dissolveRowCount_800bd710 * cols * 2;
 
-      if(blockHeight == dissolveIterationsPerformed_800bd714) {
-        dissolveIterationsPerformed_800bd714 = 0;
-        dissolveRowCount_800bd710++;
-
-        if(dissolveRowCount_800bd710 > numberOfBlocksY) {
-          dissolveRowCount_800bd710 = numberOfBlocksY;
+      if(dissolveJitterStale || steps > 0 || dissolveJitter.length < jitterCount) {
+        if(dissolveJitter.length < jitterCount) {
+          dissolveJitter = new int[jitterCount];
         }
+
+        for(int i = 0; i < jitterCount; i += 2) {
+          //LAB_8001b6a4
+          int jitterX = rand() % 4;
+          if((rand() & 1) != 0) {
+            jitterX = -jitterX;
+          }
+
+          //LAB_8001b6dc
+          dissolveJitter[i] = jitterX;
+          dissolveJitter[i + 1] = rand() % 6;
+        }
+
+        dissolveJitterStale = false;
       }
 
       //LAB_8001b608
@@ -290,17 +380,12 @@ public final class SBtld {
         final int v = displayHeight_1f8003e4 - dissolveRowCount_800bd710 * 8 + row * 8;
 
         //LAB_8001b664
-        for(int col = 0; col < width * squish / 32 * 4; col++) {
+        for(int col = 0; col < cols; col++) {
           final int u = col * 8;
 
-          //LAB_8001b6a4
-          int jitterX = rand() % 4;
-          if((rand() & 1) != 0) {
-            jitterX = -jitterX;
-          }
-
-          //LAB_8001b6dc
-          final int jitterY = rand() % 6;
+          final int jitterIndex = (row * cols + col) * 2;
+          final int jitterX = dissolveJitter[jitterIndex];
+          final int jitterY = dissolveJitter[jitterIndex + 1];
           final int left = offsetX + jitterX;
           final int top = v + offsetY + jitterY;
 
@@ -318,8 +403,6 @@ public final class SBtld {
         //LAB_8001b8b8
         offsetY += 2;
       }
-
-      dissolveIterationsPerformed_800bd714++;
     }
 
     renderBattleStartingScreenDarkening();
@@ -364,6 +447,10 @@ public final class SBtld {
     dissolveIterationsPerformed_800bd714 = 0;
     dissolveRowCount_800bd710 = 0;
     battleDissolveTicks = 0;
+    dissolveJitterStale = true;
+    transitionLogicTicks = 0;
+    // The first logic tick lands on step 3 (60 Hz steps at 20 Hz logic), start just before it so the first frame steps once
+    transitionSteps = 2;
     clearRed_8007a3a8 = 0;
     clearGreen_800bb104 = 0;
     clearBlue_800babc0 = 0;

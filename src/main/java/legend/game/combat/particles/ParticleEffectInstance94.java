@@ -1,10 +1,13 @@
 package legend.game.combat.particles;
 
 import legend.core.MathHelper;
+import legend.core.gte.MV;
 import legend.core.memory.Method;
 import legend.game.combat.effects.EffectManagerData6c;
 import legend.game.combat.effects.EffectManagerParams;
 import org.joml.Vector3f;
+
+import java.util.Arrays;
 
 import static legend.game.Scus94491BpeSegment.rcos;
 import static legend.game.Scus94491BpeSegment.rsin;
@@ -64,6 +67,38 @@ public abstract class ParticleEffectInstance94 {
   public float stepG_8c;
   public float stepB_8e;
   public int flags_90;
+
+  // Not retail - particles simulate on logic ticks and are drawn every display frame, interpolating between the
+  // visual state of the previous logic tick and the current one
+
+  /** True if the instance was simulated on the last logic tick and should be drawn */
+  public boolean visible;
+  /** Colour computed by {@link #tickAttributes} on the last logic tick */
+  public final Vector3f colour = new Vector3f();
+  /** Colour was halved on the last logic tick (flickering particles) */
+  public boolean halfBright;
+  /** Position used along with {@link #particlePosition_50} to calculate the direction of travel */
+  public final Vector3f headingFrom = new Vector3f();
+  /** Set on logic ticks, consumed by the renderer to shift the trail along by one */
+  public boolean trailShiftPending;
+  /** Screen transforms drawn on the last logic tick, becomes the next trail segment */
+  public final MV trailTickTransforms = new MV();
+
+  private final Vector3f prevParticlePosition = new Vector3f();
+  private float prevScaleHorizontal;
+  private float prevScaleVertical;
+  private float prevAngle;
+  private final Vector3f prevSpriteRotation = new Vector3f();
+  private final Vector3f prevColour = new Vector3f();
+  private Vector3f[] prevSubParticlePositions;
+
+  public final Vector3f renderPosition = new Vector3f();
+  public float renderScaleHorizontal;
+  public float renderScaleVertical;
+  public float renderAngle;
+  public final Vector3f renderSpriteRotation = new Vector3f();
+  public final Vector3f renderColour = new Vector3f();
+  public Vector3f[] renderSubParticlePositions;
 
   public ParticleEffectInstance94(final int index, final ParticleEffectData98 particle) {
     this.index = index;
@@ -304,5 +339,46 @@ public abstract class ParticleEffectInstance94 {
   protected static void setParticlePositionAlongVector(final ParticleEffectInstance94 particle) {
     particle.particlePosition_50.x = rcos(particle._14) * particle._16 >> 12;
     particle.particlePosition_50.z = rsin(particle._14) * particle._16 >> 12;
+  }
+
+  /** Remember the current visual state so the renderer can interpolate from it to the next logic tick */
+  public void storePreviousVisuals() {
+    this.prevParticlePosition.set(this.particlePosition_50);
+    this.prevScaleHorizontal = this.scaleHorizontal_06;
+    this.prevScaleVertical = this.scaleVertical_08;
+    this.prevAngle = this.angle_0e;
+    this.prevSpriteRotation.set(this.spriteRotation_70);
+    this.prevColour.set(this.colour);
+
+    if(this.subParticlePositionsArray_44 != null) {
+      if(this.prevSubParticlePositions == null || this.prevSubParticlePositions.length != this.subParticlePositionsArray_44.length) {
+        this.prevSubParticlePositions = new Vector3f[this.subParticlePositionsArray_44.length];
+        this.renderSubParticlePositions = new Vector3f[this.subParticlePositionsArray_44.length];
+        Arrays.setAll(this.prevSubParticlePositions, i -> new Vector3f());
+        Arrays.setAll(this.renderSubParticlePositions, i -> new Vector3f());
+      }
+
+      for(int i = 0; i < this.subParticlePositionsArray_44.length; i++) {
+        this.prevSubParticlePositions[i].set(this.subParticlePositionsArray_44[i]);
+      }
+    }
+  }
+
+  /** Calculate the values to draw this display frame, between the previous logic tick and the current one */
+  public void interpolateVisuals(final float alpha) {
+    this.prevParticlePosition.lerp(this.particlePosition_50, alpha, this.renderPosition);
+    this.renderScaleHorizontal = org.joml.Math.lerp(this.prevScaleHorizontal, this.scaleHorizontal_06, alpha);
+    this.renderScaleVertical = org.joml.Math.lerp(this.prevScaleVertical, this.scaleVertical_08, alpha);
+    this.renderAngle = this.prevAngle + MathHelper.closestAngle(this.angle_0e, this.prevAngle) * alpha;
+    this.renderSpriteRotation.x = this.prevSpriteRotation.x + MathHelper.closestAngle(this.spriteRotation_70.x, this.prevSpriteRotation.x) * alpha;
+    this.renderSpriteRotation.y = this.prevSpriteRotation.y + MathHelper.closestAngle(this.spriteRotation_70.y, this.prevSpriteRotation.y) * alpha;
+    this.renderSpriteRotation.z = this.prevSpriteRotation.z + MathHelper.closestAngle(this.spriteRotation_70.z, this.prevSpriteRotation.z) * alpha;
+    this.prevColour.lerp(this.colour, alpha, this.renderColour);
+
+    if(this.subParticlePositionsArray_44 != null && this.prevSubParticlePositions != null) {
+      for(int i = 0; i < this.subParticlePositionsArray_44.length; i++) {
+        this.prevSubParticlePositions[i].lerp(this.subParticlePositionsArray_44[i], alpha, this.renderSubParticlePositions[i]);
+      }
+    }
   }
 }

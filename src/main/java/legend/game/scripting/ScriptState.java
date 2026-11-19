@@ -291,6 +291,7 @@ public class ScriptState<T extends ScriptedObject> {
     this.postLifecycleEvent(ScriptLifecycleEvent.Lifecycle.PRE_RENDER_CALLBACK);
 
     if(!this.hasAnyFlag(FLAG_RENDERER_NOT_SET | FLAG_CHILD_SCRIPT)) {
+      // Battle objects are interpolated for the whole renderer pass by ScriptManager.executeScriptRenderers
       this.renderer_08.accept(this, this.innerStruct_00);
     }
 

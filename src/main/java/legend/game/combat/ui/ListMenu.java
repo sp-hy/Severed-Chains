@@ -18,6 +18,8 @@ import org.apache.logging.log4j.MarkerManager;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.sound.Audio.playMenuSound;
 import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.modding.coremod.CoreMod.INPUT_ACTION_MENU_BACK;
@@ -56,6 +58,8 @@ public abstract class ListMenu {
   protected int listScroll_1e;
   /** Decreases as you scroll down the list */
   protected int listOffsetY_20;
+  /** {@link #listOffsetY_20} as of the previous logic tick, for interpolating scrolling between ticks */
+  private int lastListOffsetY;
 
   /** Selected item relative to listScroll */
   protected int listIndex_24;
@@ -107,6 +111,7 @@ public abstract class ListMenu {
     final int y = (this.y_06 - this.height_12) - 16;
     this.listStartY_1a = y;
     this.listOffsetY_20 = y;
+    this.lastListOffsetY = y;
   }
 
   protected abstract int getListCount();
@@ -120,6 +125,27 @@ public abstract class ListMenu {
   protected boolean canUse() {
     return true;
   };
+
+  public boolean isWaitingToClose() {
+    return this.menuState_00 == 9;
+  }
+
+  private void beginClose() {
+    this.menuState_00 = 9;
+    this.flags_02 &= ~(0x1 | 0x2);
+  }
+
+  public void closeNow() {
+    if(this.menuState_00 != 9) {
+      return;
+    }
+
+    this.lastPosition.lastListIndex_26 = this.listIndex_24;
+    this.lastPosition.lastListScroll_28 = this.listScroll_1e;
+    this.onClose();
+    this.delete();
+    this.onClose.run();
+  }
 
   private void initObjs() {
     if(this.menuObj == null) {
@@ -142,8 +168,17 @@ public abstract class ListMenu {
     }
   }
 
+  /**
+   * Input (states 1, 2, 6, 8, 9) runs every display frame so the list stays responsive at 60 FPS.
+   * Scroll animation and hold-repeat delay (states 3–5) only advance on script ticks — those
+   * counters were authored for the original 20 Hz battle frame rate.
+   */
   @Method(0x800f4b80L)
   public void tick() {
+    if(SCRIPTS.willTick()) {
+      this.lastListOffsetY = this.listOffsetY_20;
+    }
+
     //LAB_800f4bc0
     switch(this.menuState_00) {
       // Restore position
@@ -162,6 +197,7 @@ public abstract class ListMenu {
         }
 
         this.listOffsetY_20 = (short)(this.y_06 - this.height_12 - 16 - this.listScroll_1e * 14);
+        this.lastListOffsetY = this.listOffsetY_20;
         this.menuState_00 = 2;
       }
 
@@ -216,6 +252,7 @@ public abstract class ListMenu {
           }
 
           //LAB_800f4e00
+          this.lastListOffsetY = this.listOffsetY_20;
           this.menuState_00 = 5;
           playMenuSound(1);
           break;
@@ -235,6 +272,7 @@ public abstract class ListMenu {
           }
 
           //LAB_800f4e98
+          this.lastListOffsetY = this.listOffsetY_20;
           this.menuState_00 = 5;
           playMenuSound(1);
           break;
@@ -242,6 +280,11 @@ public abstract class ListMenu {
 
         //LAB_800f4ecc
         if(PLATFORM.isActionHeld(INPUT_ACTION_MENU_UP.get())) {
+          // Fresh presses respond immediately, but holding repeats at the logic rate like retail
+          if(!SCRIPTS.willTick() && !PLATFORM.isActionPressed(INPUT_ACTION_MENU_UP.get())) {
+            break;
+          }
+
           if(this.listIndex_24 != 0) {
             this.menuState_00 = 5;
             this.listIndex_24--;
@@ -265,6 +308,11 @@ public abstract class ListMenu {
 
         //LAB_800f4f74
         if(PLATFORM.isActionHeld(INPUT_ACTION_MENU_DOWN.get())) {
+          // Fresh presses respond immediately, but holding repeats at the logic rate like retail
+          if(!SCRIPTS.willTick() && !PLATFORM.isActionPressed(INPUT_ACTION_MENU_DOWN.get())) {
+            break;
+          }
+
           if(this.listIndex_24 != this.getListCount() - 1) {
             if(this.listScroll_1e + this.listIndex_24 + 1 < this.getListCount()) {
               playMenuSound(1);
@@ -320,6 +368,10 @@ public abstract class ListMenu {
 
       // Scroll past top of list
       case 3 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         int scrollAmount = this.scrollAmount_80;
         this.scrollCounter_90++;
         if(this.scrollCounter_90 >= 3) {
@@ -337,6 +389,10 @@ public abstract class ListMenu {
 
       // Scroll past bottom of list
       case 4 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         int scrollAmount = this.scrollAmount_80;
         this.scrollCounter_90++;
         if(this.scrollCounter_90 >= 3) {
@@ -355,6 +411,10 @@ public abstract class ListMenu {
 
       // Scroll down
       case 5 -> {
+        if(!SCRIPTS.willTick()) {
+          break;
+        }
+
         this.scrollCounter_90++;
 
         //LAB_800f5338
@@ -376,12 +436,12 @@ public abstract class ListMenu {
           //LAB_800f5488
           playMenuSound(2);
           this.selectionState_a0 = 1;
-          this.menuState_00 = 9;
+          this.beginClose();
         } else if(ret == 2) { // Instant confirm, no sound
           LOGGER.info(BATTLE, "Player selected index %d", this.listScroll_1e + this.listIndex_24);
           this.onUse(this.listScroll_1e + this.listIndex_24);
           this.selectionState_a0 = 1;
-          this.menuState_00 = 9;
+          this.beginClose();
         } else if(ret == -1) { // Pressed O
           LOGGER.info(BATTLE, "Player cancelled menu");
           //LAB_800f54b4
@@ -396,17 +456,13 @@ public abstract class ListMenu {
       // Close list
       case 8 -> {
         this.selectionState_a0 = -1;
-        this.menuState_00 = 9;
-        this.flags_02 &= ~(0x1 | 0x2);
+        this.beginClose();
       }
 
-      // Deallocate list
+      // Wait for the 20 Hz script to read targeting info before deallocating.
+      // hud.draw ticks this menu every display frame, so closing here can null
+      // listMenu before scriptGetItemOrSpellTargetingInfo runs.
       case 9 -> {
-        this.lastPosition.lastListIndex_26 = this.listIndex_24;
-        this.lastPosition.lastListScroll_28 = this.listScroll_1e;
-        this.onClose();
-        this.delete();
-        this.onClose.run();
       }
 
       default -> throw new RuntimeException("Invalid menu state " + this.menuState_00);
@@ -414,7 +470,7 @@ public abstract class ListMenu {
 
     //LAB_800f5694
     //LAB_800f5698
-    this.selectionArrowFrame_84 = tickCount_800bb0fc & 0x7;
+    this.selectionArrowFrame_84 = tickCount_800bb0fc / currentEngineState_8004dd04.tickMultiplier() & 0x7;
 
     //LAB_800f56ac
   }
@@ -486,7 +542,8 @@ public abstract class ListMenu {
   private void drawList() {
     int trim;
 
-    int y1 = this.listOffsetY_20;
+    // Scrolling advances on logic ticks, glide between them
+    int y1 = Math.round(org.joml.Math.lerp(this.lastListOffsetY, this.listOffsetY_20, SCRIPTS.getInterpAlpha()));
     final int y2 = this.listStartY_1a;
     final int sp68 = this.y_06;
 

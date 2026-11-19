@@ -7,6 +7,8 @@ import legend.game.unpacker.FileData;
 import org.joml.Math;
 import org.joml.Vector3f;
 
+import static legend.game.EngineStates.currentEngineState_8004dd04;
+
 public class LmbType0 extends Lmb {
   public final PartInfo0c[] partAnimations_08;
 
@@ -40,22 +42,21 @@ public class LmbType0 extends Lmb {
     //LAB_800dd680
     final int count = Math.min(model.modelParts_00.length, model.partCount_98);
 
+    // animationTicks are display ticks (see EngineState#animationDisplayTicks) - tickMultiplier of them per logic tick.
+    // Retail advanced 2 logic ticks per keyframe (1 with interpolation disabled) and blended halfway on odd ticks,
+    // this blends by however far through the keyframe we are so it's smooth at any display rate.
+    final int tickMultiplier = currentEngineState_8004dd04 != null ? Math.max(1, currentEngineState_8004dd04.tickMultiplier()) : 1;
+    final int keyframeCount = Math.max(1, model.totalFrames_9a / 2);
+    final int logicFramesPerKeyframe = model.disableInterpolation_a2 ? 1 : 2;
+    final int framesPerKeyframe = logicFramesPerKeyframe * tickMultiplier;
+
     //LAB_800dd69c
-    final int a0_0;
-    final int frame;
-    final int remainingFrames;
-    final int isInterpolationFrame;
-    if(model.disableInterpolation_a2) {
-      isInterpolationFrame = 0;
-      a0_0 = (animationTicks << 1) % model.totalFrames_9a >>> 1;
-      remainingFrames = (model.totalFrames_9a >> 1) - a0_0;
-    } else {
-      //LAB_800dd6dc
-      frame = animationTicks % model.totalFrames_9a;
-      isInterpolationFrame = (animationTicks & 0x1) << 11; // Dunno why this is shifted, makes no difference
-      a0_0 = frame >>> 1;
-      remainingFrames = model.totalFrames_9a - frame;
-    }
+    //LAB_800dd6dc
+    final int frame = java.lang.Math.floorMod(animationTicks, keyframeCount * framesPerKeyframe);
+    final int a0_0 = frame / framesPerKeyframe;
+    final int subFrame = model.disableInterpolation_a2 ? 0 : frame % framesPerKeyframe;
+    // Counted in logic ticks so it reaches 0 on the last logic tick no matter which display frames get rendered
+    final int remainingFrames = keyframeCount * logicFramesPerKeyframe - frame / tickMultiplier;
 
     //LAB_800dd700
     model.remainingFrames_9e = remainingFrames - 1;
@@ -69,9 +70,9 @@ public class LmbType0 extends Lmb {
       final Vector3f trans = new Vector3f();
       trans.set(transforms.trans_06);
 
-      if(isInterpolationFrame != 0) { // Interpolation frame
+      if(subFrame != 0) { // Interpolation frame
         final LmbTransforms14 nextFrame;
-        if(animationTicks == model.totalFrames_9a - 1) {
+        if(a0_0 + 1 >= this.partAnimations_08[i].keyframes_08.length) {
           nextFrame = this.partAnimations_08[i].keyframes_08[0]; // Wrap around to frame 0
         } else {
           //LAB_800dd7cc
@@ -79,11 +80,7 @@ public class LmbType0 extends Lmb {
         }
 
         //LAB_800dd7d0
-        trans.set(
-          (trans.x + nextFrame.trans_06.x) / 2,
-          (trans.y + nextFrame.trans_06.y) / 2,
-          (trans.z + nextFrame.trans_06.z) / 2
-        );
+        trans.lerp(nextFrame.trans_06, subFrame / (float)framesPerKeyframe);
       }
 
       //LAB_800dd818

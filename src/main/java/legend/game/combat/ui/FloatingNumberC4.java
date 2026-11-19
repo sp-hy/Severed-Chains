@@ -12,6 +12,8 @@ public class FloatingNumberC4 {
   public int bentIndex_04;
   public boolean translucent_08;
   public int shade_0c;
+  /** {@link #shade_0c} as of the previous logic tick, for interpolating the fade-out between ticks */
+  public int lastShade_0c;
   public final Vector3f colour = new Vector3f();
 
   public int _10;

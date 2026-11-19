@@ -28,9 +28,9 @@ import java.util.Arrays;
 
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.GPU;
-import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
 import static legend.core.GameEngine.SCRIPTS;
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Scus94491BpeSegment.battlePreloadedEntities_1f8003f4;
 import static legend.game.Text.renderText;
 import static legend.game.combat.SEffe.additionHitCompletionState_8011a014;
@@ -65,6 +65,8 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
   public int numFramesToRenderCenterSquare_38;
   /** ubyte */
   public int lastCompletedHit_39;
+  /** Set by the ticker when the completed-hit centre square should be drawn until the next logic tick */
+  private boolean renderCompletedCentreSquare;
   /** ubyte; 0 = no auto complete, 2 = WC and UW auto-complete */
   public int autoCompleteType_3a;
 
@@ -475,7 +477,7 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
   @Override
   @Method(0x801073d4L)
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-    final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
+    this.renderCompletedCentreSquare = false;
 
     if(this.pauseTickerAndRenderer_31 == 0) {
       final AdditionOverlaysHit20[] hitArray = this.hitOverlays_40;
@@ -550,21 +552,24 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
             if(this.autoCompleteType_3a < 1 || this.autoCompleteType_3a > 2) {
               //LAB_8010763c
               if(this.autoCompleteType_3a != 3) {
-                final InputAction right;
-                final InputAction wrong;
+                // Attack = 0x20, counter = 0x40. Use latched engine inputs so a 60 Hz press
+                // on a non-logic frame is still visible to this 20 Hz ticker.
+                final int pressed = currentEngineState_8004dd04.getInputsPressed();
+                final boolean rightPressed;
+                final boolean wrongPressed;
                 if(!hitOverlay.isCounter_1c) {
-                  right = INPUT_ACTION_BTTL_ATTACK.get();
-                  wrong = INPUT_ACTION_BTTL_COUNTER.get();
+                  rightPressed = (pressed & 0x20) != 0;
+                  wrongPressed = (pressed & 0x40) != 0;
                 } else {
-                  right = INPUT_ACTION_BTTL_COUNTER.get();
-                  wrong = INPUT_ACTION_BTTL_ATTACK.get();
+                  rightPressed = (pressed & 0x40) != 0;
+                  wrongPressed = (pressed & 0x20) != 0;
                 }
 
                 //LAB_80107664
-                if(PLATFORM.isActionPressed(right) || PLATFORM.isActionPressed(wrong)) {
+                if(rightPressed || wrongPressed) {
                   additionHitCompletionState_8011a014[hitNum] = -1;
 
-                  if(!PLATFORM.isActionPressed(right) || PLATFORM.isActionPressed(wrong)) {
+                  if(!rightPressed || wrongPressed) {
                     //LAB_801076d8
                     //LAB_801076dc
                     additionHitCompletionState_8011a014[hitNum] = -3;
@@ -599,9 +604,9 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
           //LAB_80107728
           if(this.numFramesToRenderCenterSquare_38 != 0) {
             this.numFramesToRenderCenterSquare_38--;
-            if(CONFIG.getConfig(CoreMod.ADDITION_OVERLAY_CONFIG.get()) != AdditionOverlayMode.OFF) {
-              this.renderAdditionCentreSolidSquare(this, this.hitOverlays_40[this.lastCompletedHit_39], additionHitCompletionState_8011a014[this.lastCompletedHit_39], manager);
-            }
+            // Retail rendered the completed-hit square here; the ticker only runs at 20 Hz, so flag it and let the
+            // renderer draw it on every display frame until the next logic tick
+            this.renderCompletedCentreSquare = true;
           }
         }
       }
@@ -613,6 +618,11 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
   @Method(0x8010726cL)
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
     final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
+
+    // Completed-hit square, flagged by the ticker (retail drew this from the ticker)
+    if(this.renderCompletedCentreSquare && CONFIG.getConfig(CoreMod.ADDITION_OVERLAY_CONFIG.get()) != AdditionOverlayMode.OFF) {
+      this.renderAdditionCentreSolidSquare(this, this.hitOverlays_40[this.lastCompletedHit_39], additionHitCompletionState_8011a014[this.lastCompletedHit_39], manager);
+    }
 
     if(this.pauseTickerAndRenderer_31 != 1) {
       if(manager.params_10.flags_00 >= 0) {

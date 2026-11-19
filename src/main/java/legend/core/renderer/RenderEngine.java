@@ -287,11 +287,25 @@ public class RenderEngine {
 
   private long lastFrame;
   private double vsyncCount;
-  private final long[] frameTimes = new long[60];
+  private final long[] frameTimes = new long[500];
   private int fpsIndex;
   private float currentFps;
 
   private Runnable renderCallback = () -> { };
+
+  private static final int MAX_INTERPOLATION_STEPS = 4;
+  private final FrameInterpolator frameInterpolator = new FrameInterpolator();
+  /** Requested by the game, see {@link #setFrameInterpolation} */
+  private boolean interpolateFrames;
+  private int simulationRate = 60;
+  /** Frame interpolation is active this frame */
+  private boolean interpolating;
+  /** The render queues hold the latest simulation step, kept so it can be redrawn on the next display frame */
+  private boolean retainedFrame;
+  private long interpolationLastNanos;
+  private long interpolationAccumulator;
+  private float interpolationAlpha;
+  private boolean ranGameThisFrame = true;
 
   private static final float MOVE_SPEED = 0.96f;
   private static final float MOUSE_SPEED = 0.00175f;
@@ -427,7 +441,68 @@ public class RenderEngine {
   public Runnable setRenderCallback(final Runnable renderCallback) {
     final Runnable oldCallback = this.renderCallback;
     this.renderCallback = renderCallback;
+    // Whoever takes over rendering (FMVs, etc.) runs at its own rate; the game loop re-enables this if it wants it
+    this.interpolateFrames = false;
     return oldCallback;
+  }
+
+  /**
+   * Present at a higher rate than the game simulates. When enabled, the render callback (the game) is run at
+   * {@code simulationRate} steps per second in real time, and display frames in between redraw the latest step with
+   * transforms blended from the previous step. See {@link FrameInterpolator}.
+   */
+  public void setFrameInterpolation(final boolean enabled, final int simulationRate) {
+    this.interpolateFrames = enabled;
+    this.simulationRate = Math.max(1, simulationRate);
+  }
+
+  /** False on display frames where frame interpolation redrew the previous step instead of running the game */
+  public boolean ranGameThisFrame() {
+    return this.ranGameThisFrame;
+  }
+
+  /** Throws away the queued frame kept for frame interpolation so the next render callback starts fresh */
+  private void discardRetainedFrame() {
+    if(this.retainedFrame) {
+      this.retainedFrame = false;
+      this.frameInterpolator.restore(this.mainBatch, this.batches);
+      this.resetBatches();
+
+      // Delete stuff marked for deletion
+      Obj.deleteObjects();
+      Texture.deleteTextures();
+
+      this.scissorStack.reset();
+    }
+
+    this.frameInterpolator.clear();
+  }
+
+  /** How many simulation steps to run this display frame, and how far between steps the display is */
+  private int calculateInterpolationSteps() {
+    final long now = System.nanoTime();
+    final long stepNanos = 1_000_000_000L / this.simulationRate;
+
+    if(this.interpolationLastNanos == 0) {
+      // Just started, step immediately
+      this.interpolationAccumulator = stepNanos;
+    } else {
+      this.interpolationAccumulator += now - this.interpolationLastNanos;
+    }
+
+    this.interpolationLastNanos = now;
+
+    // Don't try to catch up after a hitch, the game would just fast-forward
+    this.interpolationAccumulator = Math.min(this.interpolationAccumulator, stepNanos * MAX_INTERPOLATION_STEPS);
+
+    int steps = 0;
+    while(this.interpolationAccumulator >= stepNanos) {
+      this.interpolationAccumulator -= stepNanos;
+      steps++;
+    }
+
+    this.interpolationAlpha = Math.clamp(this.interpolationAccumulator / (float)stepNanos, 0.0f, 1.0f);
+    return steps;
   }
 
   public void delete() {
@@ -473,6 +548,7 @@ public class RenderEngine {
     this.window = PLATFORM.addWindow("Severed Chains " + Version.FULL_VERSION, Config.windowWidth(), Config.windowHeight());
     this.window.events().onClose(PLATFORM::stop);
     this.window.setFpsLimit(60);
+    this.window.setShouldClearPressedInput(() -> this.ranGameThisFrame);
     PLATFORM.setInputTickRate(60);
 
     this.api = this.window.getRenderApi();
@@ -617,11 +693,14 @@ public class RenderEngine {
 
           this.scissorStack.reset();
         } else {
+          this.discardRetainedFrame();
           this.renderFrame();
         }
       }
 
       if(this.frameAdvanceSingle || this.frameAdvance) {
+        this.discardRetainedFrame();
+
         // Delete stuff marked for deletion
         Obj.deleteObjects();
         Texture.deleteTextures();
@@ -637,7 +716,59 @@ public class RenderEngine {
         }
       }
 
-      if(!this.paused) {
+      final boolean interpolate = !this.paused && this.interpolateFrames && legacyMode == 0;
+
+      if(interpolate) {
+        if(!this.interpolating) {
+          // Just switched to interpolation, start from a clean slate
+          this.discardRetainedFrame();
+          this.interpolationLastNanos = 0;
+          this.frameSkipIndex = 0;
+          this.interpolating = true;
+        }
+
+        for(int i = 0; i < this.batches.size(); i++) {
+          this.batches.get(i).modelPool.ignoreQueues = false;
+          this.batches.get(i).orthoPool.ignoreQueues = false;
+        }
+
+        this.mainBatch.modelPool.ignoreQueues = false;
+        this.mainBatch.orthoPool.ignoreQueues = false;
+
+        // Run however many simulation steps are due (usually 0 or 1), only the last one is displayed
+        final int steps = this.calculateInterpolationSteps();
+        for(int step = 0; step < steps && this.interpolateFrames; step++) {
+          this.frameInterpolator.snapshot(this.mainBatch, this.batches);
+          this.retainedFrame = false;
+          this.resetBatches();
+
+          // Delete stuff marked for deletion
+          Obj.deleteObjects();
+          Texture.deleteTextures();
+
+          this.scissorStack.reset();
+
+          this.renderFrame();
+          GameOverlay.drawNotifications();
+          GameOverlay.drawFps();
+
+          this.frameInterpolator.match(this.mainBatch, this.batches);
+          this.retainedFrame = true;
+        }
+
+        this.ranGameThisFrame = steps > 0;
+        this.frameInterpolator.apply(this.mainBatch, this.batches, this.interpolationAlpha);
+      } else if(!this.paused) {
+        if(this.interpolating) {
+          // Switched back to running the game every display frame
+          this.interpolating = false;
+          this.discardRetainedFrame();
+        }
+
+        this.ranGameThisFrame = true;
+      }
+
+      if(!this.paused && !this.interpolating) {
         if(this.frameSkipIndex == 0) {
           for(int i = 0; i < this.batches.size(); i++) {
             this.batches.get(i).modelPool.ignoreQueues = false;
@@ -665,7 +796,7 @@ public class RenderEngine {
         // Gross hack bro
         if(currentEngineState_8004dd04 instanceof final Battle battle && battle._800c6930 != null) {
           this.battleTmdShader.use();
-          this.battleTmdShaderOptions.battleColour(battle._800c6930.colour_00);
+          this.battleTmdShaderOptions.battleColour(battle.getRenderBattleColour());
         }
 
         this.renderBuffers[this.renderBufferIndex].bind();
@@ -789,25 +920,31 @@ public class RenderEngine {
 
       // If we're paused, don't reset the pool so that we keep rendering the same scene over and over again
       if(!this.paused) {
-        if(this.frameSkipIndex == 0) {
-          this.resetBatches();
+        if(this.interpolating) {
+          // Keep the queues so the next display frame can redraw them if no simulation step is due
+          this.frameInterpolator.restore(this.mainBatch, this.batches);
+          this.renderBufferIndex = (this.renderBufferIndex + 1) % RENDER_BUFFER_COUNT;
+        } else {
+          if(this.frameSkipIndex == 0) {
+            this.resetBatches();
 
-          // Delete stuff marked for deletion
-          Obj.deleteObjects();
-          Texture.deleteTextures();
+            // Delete stuff marked for deletion
+            Obj.deleteObjects();
+            Texture.deleteTextures();
 
-          this.scissorStack.reset();
-        }
-
-        if(this.frameSkip) {
-          if(this.frameSkipIndex == Config.getGameSpeedMultiplier() - 1) {
-            this.renderBufferIndex = (this.renderBufferIndex + 1) % RENDER_BUFFER_COUNT;
+            this.scissorStack.reset();
           }
 
-          this.frameSkipIndex = (this.frameSkipIndex + 1) % Config.getGameSpeedMultiplier();
-        } else {
-          this.renderBufferIndex = (this.renderBufferIndex + 1) % RENDER_BUFFER_COUNT;
-          this.frameSkipIndex = 0;
+          if(this.frameSkip) {
+            if(this.frameSkipIndex == Config.getGameSpeedMultiplier() - 1) {
+              this.renderBufferIndex = (this.renderBufferIndex + 1) % RENDER_BUFFER_COUNT;
+            }
+
+            this.frameSkipIndex = (this.frameSkipIndex + 1) % Config.getGameSpeedMultiplier();
+          } else {
+            this.renderBufferIndex = (this.renderBufferIndex + 1) % RENDER_BUFFER_COUNT;
+            this.frameSkipIndex = 0;
+          }
         }
 
         final long frameTime = System.nanoTime() - this.lastFrame;
@@ -815,16 +952,19 @@ public class RenderEngine {
         this.vsyncCount += 60.0d * Config.getGameSpeedMultiplier() / this.window.getFpsLimit();
 
         final int fpsLimit = Math.max(1, RENDERER.window().getFpsLimit() / Config.getGameSpeedMultiplier());
+        // Average over roughly one second of frames (the limit can exceed 60 when presenting at the display's refresh rate)
+        final int sampleCount = Math.min(fpsLimit, this.frameTimes.length);
+        this.fpsIndex %= sampleCount;
         this.frameTimes[this.fpsIndex] = frameTime;
-        this.fpsIndex = (this.fpsIndex + 1) % fpsLimit;
+        this.fpsIndex = (this.fpsIndex + 1) % sampleCount;
 
         if(this.fpsIndex == 0) {
           long avg = 0L;
-          for(int i = 0; i < fpsLimit; i++) {
+          for(int i = 0; i < sampleCount; i++) {
             avg += this.frameTimes[i];
           }
 
-          this.currentFps = 1_000_000_000.0f * fpsLimit / avg;
+          this.currentFps = 1_000_000_000.0f * sampleCount / avg;
 
           if(!Version.isRelease()) {
             RENDERER.window().setTitle("Severed Chains %s - FPS: %.2f/%d scale: %.2f res: %dx%d".formatted(Version.FULL_VERSION, this.currentFps, fpsLimit, RENDERER.getRenderHeight() / 240.0f, this.getNativeWidth(), this.getNativeHeight()));

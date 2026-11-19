@@ -18,6 +18,7 @@ import java.util.Arrays;
 
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.SEffe.transformWorldspaceToScreenspace;
 
 public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
@@ -39,7 +40,8 @@ public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-
+    this._02++;
+    this._04 += 0x400;
   }
 
   @Override
@@ -51,9 +53,6 @@ public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
     final Vector2f[] pos = new Vector2f[7];
 
     Arrays.setAll(pos, i -> new Vector2f());
-
-    this._02++;
-    this._04 += 0x400;
 
     //LAB_800d2888
     GuardEffectMetrics04 guardEffectMetrics;
@@ -103,8 +102,11 @@ public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
       this.transforms.transfer.set(GPU.getOffsetX(), GPU.getOffsetY(), (effectZ + managerZ) * 4.0f);
       RENDERER.queueOrthoModel(obj, this.transforms, QueuedModelStandard.class);
 
+      // Interpolate the expansion between logic ticks (_04 steps by 0x400 per tick and wraps as a short like retail)
+      final float expansion = this._02 == 0 ? this._04 : (short)(this._04 - 0x400) + 0x400 * SCRIPTS.getInterpAlpha();
+
       //LAB_800d2c78
-      int s6 = 0x1000;
+      float s6 = 0x1000;
       r = manager.params_10.colour_1c.x;
       g = manager.params_10.colour_1c.y;
       b = manager.params_10.colour_1c.z;
@@ -115,7 +117,7 @@ public class GuardEffect06 implements Effect<EffectManagerParams.VoidType> {
       //LAB_800d2cfc
       int baseX = 0;
       for(int i = 0; i < 4; i++) {
-        s6 = s6 + this._04 / 4;
+        s6 = s6 + expansion / 4;
         baseX = (int)(baseX + manager.params_10.scale_16.x * 0x1000 / 4);
         r = r - stepR;
         g = g - stepG;

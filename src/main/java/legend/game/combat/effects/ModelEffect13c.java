@@ -14,6 +14,7 @@ import legend.game.types.Model124;
 
 import static legend.core.GameEngine.GTE;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Graphics.GsGetLws;
 import static legend.game.Graphics.GsSetLightMatrix;
@@ -96,7 +97,7 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
           .backgroundColour(GTE.backgroundColour)
           .ctmdFlags(0x20 | ((part.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0))
           .tmdTranslucency(tmdGp0Tpage_1f8003ec >>> 5 & 0b11)
-          .battleColour(((Battle)currentEngineState_8004dd04)._800c6930.colour_00);
+          .battleColour(((Battle)currentEngineState_8004dd04).getRenderBattleColour());
 
         part.attribute_00 = oldAttrib;
       }
@@ -104,12 +105,14 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
 
     //LAB_800dda54
     //LAB_800dda58
-    for(int i = 0; i < 7; i++) {
-      if(model.animateTextures_ec[i]) {
-        animateModelTextures(model, i);
-      }
+    if(SCRIPTS.willTick()) {
+      for(int i = 0; i < 7; i++) {
+        if(model.animateTextures_ec[i]) {
+          animateModelTextures(model, i);
+        }
 
-      //LAB_800dda70
+        //LAB_800dda70
+      }
     }
 
     if(model.shadowType_cc != 0) {
@@ -122,23 +125,23 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
   @Override
   @Method(0x800ea3f8L)
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.AnimType>> state) {
-    final EffectManagerData6c<EffectManagerParams.AnimType> manager = state.innerStruct_00;
+    // Pose is applied in render so it can interpolate on display frames
+  }
+
+  private void applyManagerPose(final EffectManagerData6c<EffectManagerParams.AnimType> manager, final int animationTicks) {
     final MV transformMatrix = new MV();
     calculateEffectTransforms(transformMatrix, manager);
 
-    final ModelEffect13c effect = (ModelEffect13c)manager.effect_44;
-    final Model124 model = effect.model_134;
+    final Model124 model = this.model_134;
     model.coord2_14.transforms.rotate.set(manager.params_10.rot_10);
     model.coord2_14.transforms.scale.set(manager.params_10.scale_16);
     model.zOffset_a0 = manager.params_10.z_22;
     model.coord2_14.coord.set(transformMatrix);
     model.coord2_14.flg = 0;
 
-    if(effect.anim_0c != null) {
-      model.anim_08.apply(manager.params_10.ticks_24);
+    if(this.anim_0c != null) {
+      model.anim_08.apply(animationTicks);
     }
-
-    //LAB_800ea4fc
   }
 
   @Override
@@ -154,6 +157,10 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
       }
 
       //LAB_800ea574
+      // TMD/CMB anims are scaled by tickMultiplier, but LmbType0#apply still expects 20 Hz logic ticks
+      final int animationTicks = this.model_134.anim_08 instanceof Model124.LmbAnim ? manager.params_10.ticks_24 : manager.battle.animationDisplayTicks(manager.params_10.ticks_24);
+      this.applyManagerPose(manager, animationTicks);
+
       final Model124 model = this.model_134;
 
       final int oldTpage = model.tpage_108;

@@ -20,6 +20,7 @@ import java.util.function.Consumer;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.Battle.seed_800fa754;
 import static legend.game.combat.SEffe.scriptGetScriptedObjectPos;
 import static legend.game.combat.SEffe.transformWorldspaceToScreenspace;
@@ -61,6 +62,8 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
   }
 
   private final MV transforms = new MV();
+  /** Whether the rays have stepped on a logic tick yet, for display interpolation */
+  private boolean ticked;
 
   public AdditionStarburstEffect10(final int type, final int parentIndex, final int rayCount) {
     this.type = type;
@@ -76,7 +79,14 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
 
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
+    if(this.type != 0) {
+      this.ticked = true;
 
+      for(int rayNum = 0; rayNum < this.rayCount_04; rayNum++) {
+        final AdditionStarburstEffectRay10 ray = this.rayArray_0c[rayNum];
+        ray.endpointTranslationMagnitude_06 += ray.endpointTranslationMagnitudeVelocity_08;
+      }
+    }
   }
 
   @Override
@@ -185,6 +195,7 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
 
     final float[] xArray = new float[3];
     final float[] yArray = new float[3];
+    final float back = this.ticked ? 1.0f - SCRIPTS.getInterpAlpha() : 0.0f;
 
     final PolyBuilder builder = new PolyBuilder("Addition completed starburst", VertexOrder.TRIANGLES)
       .bufferUsage(BufferUsage.STREAMING)
@@ -193,8 +204,7 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
     //LAB_800d16fc
     for(int rayNum = 0; rayNum < this.rayCount_04; rayNum++) {
       final AdditionStarburstEffectRay10 ray = this.rayArray_0c[rayNum];
-
-      ray.endpointTranslationMagnitude_06 += ray.endpointTranslationMagnitudeVelocity_08;
+      final float magnitude = ray.endpointTranslationMagnitude_06 - ray.endpointTranslationMagnitudeVelocity_08 * back;
 
       //LAB_800d1728
       for(int i = 0; i < 4; i++) {
@@ -203,7 +213,7 @@ public class AdditionStarburstEffect10 implements Effect<EffectManagerParams.Voi
 
         //LAB_800d174c
         for(int j = 0; j < 3; j++) {
-          final int translationScale = Math.max(0, completedAdditionStarburstTranslationMagnitudes_800c6d94[i].get(j) - ray.endpointTranslationMagnitude_06);
+          final float translationScale = Math.max(0, completedAdditionStarburstTranslationMagnitudes_800c6d94[i].get(j) - magnitude);
 
           //LAB_800d1784
           final float angle = ray.angle_02 + completedAdditionStarburstAngleModifiers_800c6dac[i].get(j);

@@ -41,6 +41,8 @@ import static org.lwjgl.sdl.SDLPixels.SDL_PIXELFORMAT_ABGR8888;
 import static org.lwjgl.sdl.SDLSurface.SDL_CreateSurfaceFrom;
 import static org.lwjgl.sdl.SDLSurface.SDL_DestroySurface;
 import static org.lwjgl.sdl.SDLVideo.SDL_CreateWindow;
+import static org.lwjgl.sdl.SDLVideo.SDL_GetCurrentDisplayMode;
+import static org.lwjgl.sdl.SDLVideo.SDL_GetDisplayForWindow;
 import static org.lwjgl.sdl.SDLVideo.SDL_DestroyWindow;
 import static org.lwjgl.sdl.SDLVideo.SDL_GL_CONTEXT_DEBUG_FLAG;
 import static org.lwjgl.sdl.SDLVideo.SDL_GL_CONTEXT_FLAGS;
@@ -448,9 +450,27 @@ public class SdlWindow extends Window {
     return this.render.getExpectedFps();
   }
 
+  @Override
+  public float getRefreshRate() {
+    final int display = SDL_GetDisplayForWindow(this.window);
+
+    if(display != 0) {
+      final SDL_DisplayMode mode = SDL_GetCurrentDisplayMode(display);
+
+      if(mode != null && mode.refresh_rate() > 0.0f) {
+        return mode.refresh_rate();
+      }
+    }
+
+    return 60.0f;
+  }
+
   private void tick() {
     SDL_GL_SwapWindow(this.window);
     this.events().onDraw();
-    this.manager.clearPressed();
+
+    if(this.shouldClearPressedInput()) {
+      this.manager.clearPressed();
+    }
   }
 }
