@@ -138,6 +138,7 @@ import legend.game.types.CContainer;
 import legend.game.types.CContainerSubfile2;
 import legend.game.types.EquipmentSlot;
 import legend.game.types.GameState52c;
+import legend.game.types.GsF_LIGHT;
 import legend.game.types.GsRVIEW2;
 import legend.game.types.Keyframe0c;
 import legend.game.types.McqHeader;
@@ -494,6 +495,8 @@ public class Battle extends EngineState<Battle> {
   public List<? extends ScriptState<? extends BattleEntity27c>>[] targetBents_800c71f0;
 
   public int mcqColour_800fa6dc = 0x80;
+  /** {@link #mcqColour_800fa6dc} as of the last logic tick, for interpolating between ticks */
+  private int lastMcqColour = 0x80;
   public static final Rect4i[] combatantTimRects_800fa6e0 = {
     new Rect4i(0, 0, 0, 0), new Rect4i(320, 256, 64, 256),
     new Rect4i(384, 256, 64, 256), new Rect4i(448, 256, 64, 256),
@@ -521,6 +524,10 @@ public class Battle extends EngineState<Battle> {
 
   /** Last 20 Hz script's button-press HUD; replayed on in-between display frames. */
   private final List<ButtonPressHudElement> buttonPressHudElements = new ArrayList<>();
+  /** Drawn by scripts on logic ticks, redrawn every display frame until the next tick */
+  private final List<ScriptColouredQuad> scriptColouredQuads = new ArrayList<>();
+  /** Drawn by scripts on logic ticks, redrawn every display frame until the next tick */
+  private final List<ScriptHudBackground> scriptHudBackgrounds = new ArrayList<>();
 
   public static final ButtonPressHudMetrics06[] buttonPressHudMetrics_800faaa0 = {
     new ButtonPressHudMetrics06(0, 184, 96, 24, 16, 42),
@@ -629,7 +636,13 @@ public class Battle extends EngineState<Battle> {
   public void init() {
     super.init();
     clearCombatVars();
-    SCRIPTS.setFramesPerTick(this.tickMultiplier());
+
+    // Logic runs at the original 20 Hz in real time; rendering runs at the display's refresh rate and interpolates
+    // between logic ticks. Sub-ticks drive legacy per-frame counters; round down so there's at most one sub-tick per
+    // display frame at a steady frame rate (the +1 keeps e.g. 59.94 Hz at 3 rather than 2).
+    this.tickMultiplier = Math.max(1, (int)((RENDERER.window().getRefreshRate() + 1.0f) / LOGIC_TICKS_PER_SECOND));
+    SCRIPTS.setFramesPerTick(this.tickMultiplier);
+    SCRIPTS.setFixedTickRate(LOGIC_TICKS_PER_SECOND);
   }
 
   @Override
@@ -637,6 +650,12 @@ public class Battle extends EngineState<Battle> {
     super.destroy();
     sssqResetStuff();
   }
+
+  /** Battle logic (scripts, tickers) rate. Rendering is decoupled from this. */
+  public static final int LOGIC_TICKS_PER_SECOND = 20;
+
+  /** Sub-ticks per logic tick, see {@link #init()} */
+  private int tickMultiplier = 3;
 
   private int inputPressed;
   private int inputRepeat;
@@ -711,6 +730,14 @@ public class Battle extends EngineState<Battle> {
       renderButtonPressHudElement1(element.type, element.x, element.y, element.translucency, element.brightness);
     }
 
+    for(int i = 0; i < this.scriptColouredQuads.size(); i++) {
+      this.renderScriptColouredQuad(this.scriptColouredQuads.get(i));
+    }
+
+    for(int i = 0; i < this.scriptHudBackgrounds.size(); i++) {
+      this.renderScriptHudBackground(this.scriptHudBackgrounds.get(i));
+    }
+
     // Latch pressed/repeat across display frames so 20 Hz script/addition ticks cannot miss a 60 Hz press
     if(scriptsTicked) {
       this.inputPressed = 0;
@@ -737,17 +764,23 @@ public class Battle extends EngineState<Battle> {
 
   @Override
   public int tickMultiplier() {
-    return 3;
+    return this.tickMultiplier;
   }
 
   @Override
   public int getTargetFps() {
-    return 60;
+    return Math.max(LOGIC_TICKS_PER_SECOND, Math.round(RENDERER.window().getRefreshRate()));
   }
 
   @Override
   public boolean tickersOnlyOnScriptFrames() {
     return true;
+  }
+
+  /** Battle runs its own fixed-rate logic clock and interpolates itself, see {@link #init()} */
+  @Override
+  public boolean interpolateFrames() {
+    return false;
   }
 
   @Override
@@ -757,6 +790,8 @@ public class Battle extends EngineState<Battle> {
 
     if(SCRIPTS.willTick()) {
       this.buttonPressHudElements.clear();
+      this.scriptColouredQuads.clear();
+      this.scriptHudBackgrounds.clear();
     }
 
     if(battleLoaded_800bc94c) {
@@ -2408,7 +2443,8 @@ public class Battle extends EngineState<Battle> {
       return;
     }
 
-    if(Loader.getLoadingFileCount() == 0 && battleState_8006e398.hasBents() && !this.combatDisabled_800c66b9 && this.FUN_800c7da8()) {
+    // Turn selection is game logic, so only run it on logic ticks (it ran once per 20 Hz frame in retail)
+    if(SCRIPTS.willTick() && Loader.getLoadingFileCount() == 0 && battleState_8006e398.hasBents() && !this.combatDisabled_800c66b9 && this.FUN_800c7da8()) {
       vsyncMode_8007a3b8 = 3;
       this.mcqColour_800fa6dc = 0x80;
       this.currentTurnBent_800c66c8.clearFlag(FLAG_RELOAD_BATTLE_ACTIONS);
@@ -2679,6 +2715,12 @@ public class Battle extends EngineState<Battle> {
 
   @Method(0x800c882cL)
   public void renderSkybox() {
+    // This runs before scripts on logic frames, so this is the colour retail would have shown this tick. Between ticks
+    // we fade from it toward whatever the scripts have set since.
+    if(SCRIPTS.willTick()) {
+      this.lastMcqColour = this.mcqColour_800fa6dc;
+    }
+
     if(!this.shouldRenderMcq_800c6764 || !this.shouldRenderMcq_800c66d4 || (battleFlags_800bc960 & 0x80) == 0) {
       //LAB_800c8ad8
       //LAB_800c8adc
@@ -2702,8 +2744,12 @@ public class Battle extends EngineState<Battle> {
         this.mcqOffsetX_800c6774 += this.mcqStepX_800c676c;
         this.mcqOffsetY_800c6778 += this.mcqStepY_800c6770;
       }
-      final int x0 = (this.mcqBaseOffsetX_800c66cc * MathHelper.radToPsxDeg(this.camera_800c67f0.calculateXAngleFromRefpointToViewpoint()) / 0x1000 + this.mcqOffsetX_800c6774) % mcq.screenWidth_14;
-      int y = this.mcqOffsetY_800c6778 - MathHelper.radToPsxDeg(MathHelper.floorMod(this.camera_800c67f0.calculateYAngleFromRefpointToViewpoint() + MathHelper.PI, MathHelper.TWO_PI)) + 1888;
+
+      // Scroll smoothly toward where the next logic tick will put the skybox
+      final float alpha = SCRIPTS.getInterpAlpha();
+      final float x0 = (this.mcqBaseOffsetX_800c66cc * MathHelper.radToPsxDeg(this.camera_800c67f0.calculateXAngleFromRefpointToViewpoint()) / 0x1000 + this.mcqOffsetX_800c6774 + this.mcqStepX_800c676c * alpha) % mcq.screenWidth_14;
+      float y = this.mcqOffsetY_800c6778 + this.mcqStepY_800c6770 * alpha - MathHelper.radToPsxDeg(MathHelper.floorMod(this.camera_800c67f0.calculateYAngleFromRefpointToViewpoint() + MathHelper.PI, MathHelper.TWO_PI)) + 1888;
+      final float monochrome = this.lastMcqColour + (this.mcqColour_800fa6dc - this.lastMcqColour) * alpha;
 
       final float totalWidth = RENDERER.getNativeWidth() * RENDERER.getRenderAspectRatio() / RENDERER.getNativeAspectRatio();
       final int segments = (int)Math.ceil(totalWidth / mcq.screenWidth_14);
@@ -2711,7 +2757,7 @@ public class Battle extends EngineState<Battle> {
       for(int i = -1; i < segments + 1; i++) {
         battlePreloadedEntities_1f8003f4.skyboxTransforms.transfer.set(-totalWidth / 2.0f + i * mcq.screenWidth_14 + x0, y, 60000.0f);
         RENDERER.queueOrthoModel(battlePreloadedEntities_1f8003f4.skyboxObj, battlePreloadedEntities_1f8003f4.skyboxTransforms, QueuedModelStandard.class)
-          .monochrome(this.mcqColour_800fa6dc / 128.0f);
+          .monochrome(monochrome / 128.0f);
       }
 
       //LAB_800c89d4
@@ -2721,7 +2767,7 @@ public class Battle extends EngineState<Battle> {
       }
 
       //LAB_800c8a04
-      final int colour = this.mcqColour_800fa6dc;
+      final int colour = Math.round(monochrome);
       if(y >= -centreScreenY_1f8003de) {
         clearRed_8007a3a8 = mcq.colour0_18.x * colour / 0x80;
         clearGreen_800bb104 = mcq.colour0_18.y * colour / 0x80;
@@ -4891,6 +4937,12 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.IN, type = ScriptParam.Type.INT, name = "translucency", description = "The translucency mode")
   @Method(0x800cef00L)
   public FlowControl scriptRenderColouredQuad(final RunningScript<?> script) {
+    // Scripts only run on logic ticks, so latch this and draw it every display frame until the next tick (see postScriptTick)
+    this.scriptColouredQuads.add(new ScriptColouredQuad(script.params_20[0].get(), script.params_20[1].get(), script.params_20[2].get(), Translucency.of(script.params_20[3].get() + 1)));
+    return FlowControl.CONTINUE;
+  }
+
+  private void renderScriptColouredQuad(final ScriptColouredQuad quad) {
     // Make sure effect fills the whole screen
     final float fullWidth = java.lang.Math.max(RENDERER.getNativeWidth(), (float)RENDERER.getRenderWidth() / RENDERER.getRenderHeight() * displayHeight_1f8003e4 * 1.1f);
     fullScreenEffect_800bb140.transforms
@@ -4899,10 +4951,8 @@ public class Battle extends EngineState<Battle> {
     ;
 
     //LAB_800139c4
-    RENDERER.queueOrthoModel(RENDERER.plainQuads.get(Translucency.of(script.params_20[3].get() + 1)), fullScreenEffect_800bb140.transforms, QueuedModelStandard.class)
-      .colour(script.params_20[0].get() / 255.0f, script.params_20[1].get() / 255.0f, script.params_20[2].get() / 255.0f);
-
-    return FlowControl.CONTINUE;
+    RENDERER.queueOrthoModel(RENDERER.plainQuads.get(quad.translucency()), fullScreenEffect_800bb140.transforms, QueuedModelStandard.class)
+      .colour(quad.r() / 255.0f, quad.g() / 255.0f, quad.b() / 255.0f);
   }
 
   @Method(0x800cf03cL)
@@ -5752,7 +5802,8 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.OUT, type = ScriptParam.Type.INT, name = "distance", description = "The projection plane distance")
   @Method(0x800dbcfcL)
   public FlowControl scriptGetProjectionPlaneDistance(final RunningScript<?> script) {
-    script.params_20[0].set(Math.round(getProjectionPlaneDistance()));
+    // Scripts must see the logic value, not the value interpolated for rendering
+    script.params_20[0].set(Math.round(this.camera_800c67f0.getLogicProjectionPlaneDistance()));
     return FlowControl.CONTINUE;
   }
 
@@ -6565,15 +6616,67 @@ public class Battle extends EngineState<Battle> {
     }
   }
 
-  @Method(0x800e5fe8L)
-  public void updateLighting(final ScriptState<ScriptedObject> state, final ScriptedObject struct) {
-    //LAB_800e6008
-    for(int i = 0; i < 3; i++) {
-      GsSetFlatLight(i, this.lights_800c692c[i].light_00);
+  /** Light state as of the previous ({@code start}) and latest ({@code end}) logic ticks, lerped between in {@link #updateLighting} */
+  private final GsF_LIGHT[] lightsInterpStart = {new GsF_LIGHT(), new GsF_LIGHT(), new GsF_LIGHT()};
+  private final GsF_LIGHT[] lightsInterpEnd = {new GsF_LIGHT(), new GsF_LIGHT(), new GsF_LIGHT()};
+  private final GsF_LIGHT lightInterp = new GsF_LIGHT();
+  private final Vector3f battleColourInterpStart = new Vector3f();
+  private final Vector3f battleColourInterpEnd = new Vector3f();
+  private final Vector3f battleColourInterp = new Vector3f();
+  private boolean lightingInterpInitialized;
+
+  /** The battle colour ({@link BattleLightStruct64#colour_00}) interpolated between logic ticks, for rendering */
+  public Vector3f getRenderBattleColour() {
+    if(!this.lightingInterpInitialized) {
+      return this._800c6930.colour_00;
     }
 
+    return this.battleColourInterp;
+  }
+
+  private static void copyLight(final GsF_LIGHT src, final GsF_LIGHT dst) {
+    dst.direction_00.set(src.direction_00);
+    dst.r_0c = src.r_0c;
+    dst.g_0d = src.g_0d;
+    dst.b_0e = src.b_0e;
+  }
+
+  @Method(0x800e5fe8L)
+  public void updateLighting(final ScriptState<ScriptedObject> state, final ScriptedObject struct) {
     final BattleLightStruct64 v0 = this._800c6930;
-    GTE.setBackgroundColour(v0.colour_00.x, v0.colour_00.y, v0.colour_00.z);
+
+    // Lights are animated by the 20 Hz ticker, so smooth them out between logic ticks
+    if(!this.lightingInterpInitialized || SCRIPTS.willTick()) {
+      for(int i = 0; i < 3; i++) {
+        copyLight(this.lightingInterpInitialized ? this.lightsInterpEnd[i] : this.lights_800c692c[i].light_00, this.lightsInterpStart[i]);
+        copyLight(this.lights_800c692c[i].light_00, this.lightsInterpEnd[i]);
+      }
+
+      this.battleColourInterpStart.set(this.lightingInterpInitialized ? this.battleColourInterpEnd : v0.colour_00);
+      this.battleColourInterpEnd.set(v0.colour_00);
+      this.lightingInterpInitialized = true;
+    }
+
+    final float alpha = SCRIPTS.getInterpAlpha();
+
+    //LAB_800e6008
+    for(int i = 0; i < 3; i++) {
+      final GsF_LIGHT start = this.lightsInterpStart[i];
+      final GsF_LIGHT end = this.lightsInterpEnd[i];
+      this.lightInterp.direction_00.set(start.direction_00).lerp(end.direction_00, alpha);
+
+      if(this.lightInterp.direction_00.lengthSquared() < 0.000001f) {
+        this.lightInterp.direction_00.set(end.direction_00);
+      }
+
+      this.lightInterp.r_0c = start.r_0c + (end.r_0c - start.r_0c) * alpha;
+      this.lightInterp.g_0d = start.g_0d + (end.g_0d - start.g_0d) * alpha;
+      this.lightInterp.b_0e = start.b_0e + (end.b_0e - start.b_0e) * alpha;
+      GsSetFlatLight(i, this.lightInterp);
+    }
+
+    this.battleColourInterp.set(this.battleColourInterpStart).lerp(this.battleColourInterpEnd, alpha);
+    GTE.setBackgroundColour(this.battleColourInterp.x, this.battleColourInterp.y, this.battleColourInterp.z);
     projectionPlaneDistance_1f8003f8 = getProjectionPlaneDistance();
   }
 
@@ -6585,6 +6688,7 @@ public class Battle extends EngineState<Battle> {
     state.setRenderer(this::updateLighting);
     this._800c6930.colourIndex_60 = 0;
     this.resetLights();
+    this.lightingInterpInitialized = false;
   }
 
   @Method(0x800e6314L)
@@ -8106,7 +8210,7 @@ public class Battle extends EngineState<Battle> {
           .lightColour(lightColourMatrix_800c3508)
           .backgroundColour(GTE.backgroundColour)
           .ctmdFlags((part.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0)
-          .battleColour(this._800c6930.colour_00);
+          .battleColour(this.getRenderBattleColour());
       }
 
       //LAB_800ec608
@@ -9321,7 +9425,13 @@ public class Battle extends EngineState<Battle> {
   @ScriptParam(direction = ScriptParam.Direction.IN, type = ScriptParam.Type.INT, name = "colourIndex", description = "The textboxColour index")
   @Method(0x800f9c2cL)
   public FlowControl scriptRenderBattleHudBackground(final RunningScript<?> script) {
-    final int colourIndex = script.params_20[4].get();
+    // Scripts only run on logic ticks, so latch this and draw it every display frame until the next tick (see postScriptTick)
+    this.scriptHudBackgrounds.add(new ScriptHudBackground(script.params_20[0].get(), script.params_20[1].get(), script.params_20[2].get(), script.params_20[3].get(), script.params_20[4].get()));
+    return FlowControl.CONTINUE;
+  }
+
+  private void renderScriptHudBackground(final ScriptHudBackground background) {
+    final int colourIndex = background.colourIndex();
     final int r = textboxColours_800c6fec[colourIndex][0];
     final int g = textboxColours_800c6fec[colourIndex][1];
     final int b = textboxColours_800c6fec[colourIndex][2];
@@ -9331,18 +9441,16 @@ public class Battle extends EngineState<Battle> {
     }
 
     this.scriptUi.setPos(
-      (short)script.params_20[0].get() - script.params_20[2].get() / 2,
-      (short)script.params_20[1].get() - script.params_20[3].get() / 2
+      (short)background.x() - background.width() / 2,
+      (short)background.y() - background.height() / 2
     );
 
     this.scriptUi.setSize(
-      (short)script.params_20[2].get(),
-      (short)script.params_20[3].get()
+      (short)background.width(),
+      (short)background.height()
     );
 
     this.scriptUi.render(r / 255.0f, g / 255.0f, b / 255.0f);
-
-    return FlowControl.CONTINUE;
   }
 
   @ScriptDescription("Unknown, disables menu icons if certain flags are set")
@@ -9460,4 +9568,6 @@ public class Battle extends EngineState<Battle> {
   }
 
   private record ButtonPressHudElement(int type, int x, int y, Translucency translucency, int brightness) { }
+  private record ScriptColouredQuad(int r, int g, int b, Translucency translucency) { }
+  private record ScriptHudBackground(int x, int y, int width, int height, int colourIndex) { }
 }

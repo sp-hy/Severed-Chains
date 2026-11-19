@@ -104,7 +104,8 @@ public class Cmb extends TmdAnimationFile {
     subFrame = frame % framesPerKeyframe;
     isInterpolationFrame = !model.disableInterpolation_a2 && subFrame != 0 ? 1 : 0;
     frameIndex = Math.max(0, cmbAnim.animationTicks_00) / framesPerKeyframe % keyframeCount;
-    model.remainingFrames_9e = totalDisplayFrames - frame - 1;
+    // Counted in logic ticks (as in retail) so it reaches 0 on the last logic tick no matter which display frames get rendered
+    model.remainingFrames_9e = totalDisplayFrames / tickMultiplier - frame / tickMultiplier - 1;
     model.subFrameIndex = subFrame;
 
     //LAB_800dde60

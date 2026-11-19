@@ -13,6 +13,9 @@ public class WsDragoonTransformationFeatherInstance70 {
   public int currentFrame_04;
 
   public final Vector3f translation_08 = new Vector3f();
+  /** {@link #translation_08} before the latest logic tick, for display interpolation */
+  public final Vector3f prevTranslation = new Vector3f();
+  public boolean hasPrevTranslation;
 
   public float velocityTranslationMagnitudeY_1c;
 

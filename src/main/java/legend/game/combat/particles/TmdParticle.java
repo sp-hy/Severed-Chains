@@ -25,6 +25,7 @@ import java.util.Arrays;
 
 import static legend.core.GameEngine.GTE;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Graphics.GsSetLightMatrix;
 import static legend.game.Graphics.inverseWorldToScreenMatrix;
@@ -160,7 +161,7 @@ public class TmdParticle extends ParticleEffectData98 {
         .backgroundColour(GTE.backgroundColour)
         .ctmdFlags((dobj.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0)
         .tmdTranslucency(tmdGp0Tpage_1f8003ec >>> 5 & 0b11)
-        .battleColour(((Battle)currentEngineState_8004dd04)._800c6930.colour_00);
+        .battleColour(((Battle)currentEngineState_8004dd04).getRenderBattleColour());
 
       if((particleMetrics.flags_00 & 0x40) == 0) {
         FUN_800e62a8();
@@ -170,9 +171,15 @@ public class TmdParticle extends ParticleEffectData98 {
   }
 
   @Override
+  protected void tickInstance(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectInstance94 inst) {
+    inst.beforeRender(manager);
+    inst.tickAttributes(manager, inst.colour);
+  }
+
+  @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
     final EffectManagerData6c<EffectManagerParams.ParticleType> manager = state.innerStruct_00;
-    this.countFramesRendered_52++;
+    final float alpha = SCRIPTS.getInterpAlpha();
 
     if(this.obj == null) {
       this.obj = TmdObjLoader.fromObjTable("Particle", this.tmd_30);
@@ -182,26 +189,25 @@ public class TmdParticle extends ParticleEffectData98 {
     for(int i = 0; i < this.countParticleInstance_50; i++) {
       final ParticleEffectInstance94 inst = this.particleArray_68[i];
 
-      if(inst.tick(manager)) {
-        inst.beforeRender(manager);
-        final Vector3f colour = new Vector3f();
-        inst.tickAttributes(manager, colour);
+      // Simulation happens on logic ticks, see tickInstance
+      if(inst.visible) {
+        inst.interpolateVisuals(alpha);
 
         final Vector3f rotatedAndTranslatedPosition = new Vector3f();
-        rotateAndTranslateEffect(manager, null, inst.particlePosition_50, rotatedAndTranslatedPosition);
+        rotateAndTranslateEffect(manager, null, inst.renderPosition, rotatedAndTranslatedPosition);
 
         final ParticleMetrics48 particleMetrics = new ParticleMetrics48();
         particleMetrics.flags_00 = manager.params_10.flags_00;
         particleMetrics.translation_18.set(inst.managerTranslation_2c).add(rotatedAndTranslatedPosition);
 
         particleMetrics.scale_28.set(
-          manager.params_10.scale_16.x + inst.scaleHorizontal_06,
-          manager.params_10.scale_16.y + inst.scaleVertical_08,
-          manager.params_10.scale_16.x + inst.scaleHorizontal_06 // This is correct
+          manager.params_10.scale_16.x + inst.renderScaleHorizontal,
+          manager.params_10.scale_16.y + inst.renderScaleVertical,
+          manager.params_10.scale_16.x + inst.renderScaleHorizontal // This is correct
         );
 
-        particleMetrics.rotation_38.set(inst.spriteRotation_70).add(inst.managerRotation_68);
-        particleMetrics.colour0_40.set(colour.x, colour.y, colour.z);
+        particleMetrics.rotation_38.set(inst.renderSpriteRotation).add(inst.managerRotation_68);
+        particleMetrics.colour0_40.set(inst.renderColour);
         particleMetrics.colour1_44.set(0, 0, 0);
         this.renderTmdParticle(manager, this.tmd_30, this.obj, particleMetrics, this.tpage_56);
       }
@@ -209,9 +215,7 @@ public class TmdParticle extends ParticleEffectData98 {
     }
 
     //LAB_800fd7fc
-    if(this.scaleOrUseEffectAcceleration_6c) {
-      this.effectAcceleration_70.mul(this.scaleParticleAcceleration_80);
-    }
+    // Effect acceleration is scaled on logic ticks, see ParticleEffectData98#tick
     //LAB_800fd858
   }
 }

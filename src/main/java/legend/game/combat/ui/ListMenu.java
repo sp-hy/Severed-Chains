@@ -19,7 +19,7 @@ import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.RENDERER;
 import static legend.core.GameEngine.SCRIPTS;
-import static legend.game.Graphics.vsyncMode_8007a3b8;
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.sound.Audio.playMenuSound;
 import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.modding.coremod.CoreMod.INPUT_ACTION_MENU_BACK;
@@ -58,6 +58,8 @@ public abstract class ListMenu {
   protected int listScroll_1e;
   /** Decreases as you scroll down the list */
   protected int listOffsetY_20;
+  /** {@link #listOffsetY_20} as of the previous logic tick, for interpolating scrolling between ticks */
+  private int lastListOffsetY;
 
   /** Selected item relative to listScroll */
   protected int listIndex_24;
@@ -109,6 +111,7 @@ public abstract class ListMenu {
     final int y = (this.y_06 - this.height_12) - 16;
     this.listStartY_1a = y;
     this.listOffsetY_20 = y;
+    this.lastListOffsetY = y;
   }
 
   protected abstract int getListCount();
@@ -172,6 +175,10 @@ public abstract class ListMenu {
    */
   @Method(0x800f4b80L)
   public void tick() {
+    if(SCRIPTS.willTick()) {
+      this.lastListOffsetY = this.listOffsetY_20;
+    }
+
     //LAB_800f4bc0
     switch(this.menuState_00) {
       // Restore position
@@ -190,6 +197,7 @@ public abstract class ListMenu {
         }
 
         this.listOffsetY_20 = (short)(this.y_06 - this.height_12 - 16 - this.listScroll_1e * 14);
+        this.lastListOffsetY = this.listOffsetY_20;
         this.menuState_00 = 2;
       }
 
@@ -244,6 +252,7 @@ public abstract class ListMenu {
           }
 
           //LAB_800f4e00
+          this.lastListOffsetY = this.listOffsetY_20;
           this.menuState_00 = 5;
           playMenuSound(1);
           break;
@@ -263,6 +272,7 @@ public abstract class ListMenu {
           }
 
           //LAB_800f4e98
+          this.lastListOffsetY = this.listOffsetY_20;
           this.menuState_00 = 5;
           playMenuSound(1);
           break;
@@ -270,6 +280,11 @@ public abstract class ListMenu {
 
         //LAB_800f4ecc
         if(PLATFORM.isActionHeld(INPUT_ACTION_MENU_UP.get())) {
+          // Fresh presses respond immediately, but holding repeats at the logic rate like retail
+          if(!SCRIPTS.willTick() && !PLATFORM.isActionPressed(INPUT_ACTION_MENU_UP.get())) {
+            break;
+          }
+
           if(this.listIndex_24 != 0) {
             this.menuState_00 = 5;
             this.listIndex_24--;
@@ -293,6 +308,11 @@ public abstract class ListMenu {
 
         //LAB_800f4f74
         if(PLATFORM.isActionHeld(INPUT_ACTION_MENU_DOWN.get())) {
+          // Fresh presses respond immediately, but holding repeats at the logic rate like retail
+          if(!SCRIPTS.willTick() && !PLATFORM.isActionPressed(INPUT_ACTION_MENU_DOWN.get())) {
+            break;
+          }
+
           if(this.listIndex_24 != this.getListCount() - 1) {
             if(this.listScroll_1e + this.listIndex_24 + 1 < this.getListCount()) {
               playMenuSound(1);
@@ -450,7 +470,7 @@ public abstract class ListMenu {
 
     //LAB_800f5694
     //LAB_800f5698
-    this.selectionArrowFrame_84 = tickCount_800bb0fc / Math.max(1, vsyncMode_8007a3b8) & 0x7;
+    this.selectionArrowFrame_84 = tickCount_800bb0fc / currentEngineState_8004dd04.tickMultiplier() & 0x7;
 
     //LAB_800f56ac
   }
@@ -522,7 +542,8 @@ public abstract class ListMenu {
   private void drawList() {
     int trim;
 
-    int y1 = this.listOffsetY_20;
+    // Scrolling advances on logic ticks, glide between them
+    int y1 = Math.round(org.joml.Math.lerp(this.lastListOffsetY, this.listOffsetY_20, SCRIPTS.getInterpAlpha()));
     final int y2 = this.listStartY_1a;
     final int sp68 = this.y_06;
 

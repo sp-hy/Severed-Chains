@@ -23,6 +23,15 @@ public abstract class QueuedModel<Options extends ShaderOptionsBase, T extends Q
   int sequence;
   final Matrix4f transforms = new Matrix4f();
   final Vector3f screenspaceOffset = new Vector3f();
+
+  // Frame interpolation (see FrameInterpolator)
+  /** The transforms queued by the latest simulation step ({@link #transforms} may hold a blended value while rendering) */
+  final Matrix4f stepTransforms = new Matrix4f();
+  final Vector3f stepScreenspaceOffset = new Vector3f();
+  /** The same model's transforms from the previous simulation step, if it was found */
+  final Matrix4f previousTransforms = new Matrix4f();
+  final Vector3f previousScreenspaceOffset = new Vector3f();
+  boolean hasPreviousStep;
   final Vector3f colour = new Vector3f();
   final Vector2f clutOverride = new Vector2f();
   final Vector2f tpageOverride = new Vector2f();
@@ -165,6 +174,7 @@ public abstract class QueuedModel<Options extends ShaderOptionsBase, T extends Q
   void acquire(final Obj obj, final int sequence) {
     this.obj = obj;
     this.sequence = sequence;
+    this.hasPreviousStep = false;
     this.screenspaceOffset.zero();
     this.colour.set(1.0f, 1.0f, 1.0f);
     this.clutOverride.zero();

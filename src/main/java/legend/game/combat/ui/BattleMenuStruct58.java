@@ -113,6 +113,11 @@ public class BattleMenuStruct58 {
   public int targetType_50;
   public int combatantIndex_54;
 
+  /** Highlight pose as of the previous logic tick, for interpolating highlight movement between ticks */
+  public int lastHighlightX0;
+  public int lastHighlightX1;
+  public int lastColour;
+
   public final MV transforms = new MV();
   public Obj menuObj;
   public int actionDisabledObjOffset;
@@ -146,6 +151,9 @@ public class BattleMenuStruct58 {
     this.highlightX0_28 = 0;
     this.highlightY_2a = 0;
     this.colour_2c = 0;
+    this.lastHighlightX0 = 0;
+    this.lastHighlightX1 = 0;
+    this.lastColour = 0;
 
     //LAB_800f60fc
     this.actions.clear();
@@ -166,6 +174,13 @@ public class BattleMenuStruct58 {
 
     this.targetedMonsterSlot_800c697e = 0;
     this.targetedPlayerSlot_800c6980 = 0;
+  }
+
+  /** Jump the interpolated highlight straight to its current pose (for teleports rather than movement) */
+  public void snapHighlight() {
+    this.lastHighlightX0 = this.highlightX0_28;
+    this.lastHighlightX1 = this.highlightX1_3c;
+    this.lastColour = this.colour_2c;
   }
 
   public void initIconObjs() {

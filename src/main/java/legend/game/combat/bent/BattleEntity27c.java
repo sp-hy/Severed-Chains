@@ -42,6 +42,7 @@ import static legend.core.GameEngine.EVENTS;
 import static legend.core.GameEngine.GTE;
 import static legend.core.GameEngine.REGISTRIES;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Graphics.GsGetLws;
 import static legend.game.Graphics.GsSetLightMatrix;
@@ -715,8 +716,13 @@ public abstract class BattleEntity27c extends BattleObject {
     if(!state.hasAnyFlag(FLAG_MONSTER_SUB_PART | FLAG_HIDE | FLAG_1)) {
       applyModelRotationAndScale(this.model_148);
 
-      if(!state.hasFlag(FLAG_ANIMATE_ONCE) || this.model_148.remainingFrames_9e != 0) {
-        animateModel(this.model_148, 2 * this.battle.tickMultiplier());
+      // Advance one animation sub-frame per elapsed sub-tick rather than per display frame, so animations stay
+      // locked to the 20 Hz logic no matter how fast we're rendering (may be 0 or several on a given frame)
+      final int subTicks = SCRIPTS.getSubTicksThisFrame();
+      for(int i = 0; i < subTicks; i++) {
+        if(!state.hasFlag(FLAG_ANIMATE_ONCE) || this.model_148.remainingFrames_9e != 0) {
+          animateModel(this.model_148, 2 * this.battle.tickMultiplier());
+        }
       }
 
       this.renderBttlModel(this.model_148, bent.combatant_144);
@@ -790,7 +796,7 @@ public abstract class BattleEntity27c extends BattleObject {
           .backgroundColour(GTE.backgroundColour)
           .ctmdFlags((part.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0)
           .tmdTranslucency(tmdGp0Tpage_1f8003ec >>> 5 & 0b11)
-          .battleColour(((Battle)currentEngineState_8004dd04)._800c6930.colour_00);
+          .battleColour(((Battle)currentEngineState_8004dd04).getRenderBattleColour());
 
         if(this.useScissor) {
           queue.scissor(this.scissor);

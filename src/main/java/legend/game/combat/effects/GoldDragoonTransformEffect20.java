@@ -7,11 +7,13 @@ import legend.core.memory.Method;
 import legend.core.renderer.Obj;
 import legend.game.scripting.ScriptState;
 import legend.game.tmd.Renderer;
+import org.joml.Vector3f;
 
 import java.util.Arrays;
 
 import static legend.core.GameEngine.GTE;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.tmdGp0Tpage_1f8003ec;
 import static legend.game.Graphics.worldToScreenMatrix_800c3548;
 import static legend.game.Graphics.zOffset_1f8003e8;
@@ -26,6 +28,7 @@ public class GoldDragoonTransformEffect20 implements Effect<EffectManagerParams.
   private final MV w2sTransforms = new MV();
 
   public Obj rockObjster;
+  private boolean ticked;
 
   public GoldDragoonTransformEffect20(final int count) {
     this.parts_08 = new GoldDragoonTransformEffectInstance84[count];
@@ -36,6 +39,7 @@ public class GoldDragoonTransformEffect20 implements Effect<EffectManagerParams.
   @Method(0x8010dcd0L)
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
     int unusedCount = 0;
+    this.ticked = true;
 
     //LAB_8010dd00
     for(final GoldDragoonTransformEffectInstance84 instance : this.parts_08) {
@@ -45,6 +49,8 @@ public class GoldDragoonTransformEffect20 implements Effect<EffectManagerParams.
       }
 
       //LAB_8010dd18
+      instance.prevTrans.set(instance.trans_08);
+      instance.prevRot.set(instance.rot_38);
       instance.preMovementTick_80++;
 
       if(instance.preMovementTicks_7e != -1) {
@@ -91,13 +97,24 @@ public class GoldDragoonTransformEffect20 implements Effect<EffectManagerParams.
     final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
 
     final ModelPart10 dobj2 = new ModelPart10();
+    final float alpha = SCRIPTS.getInterpAlpha();
+    final Vector3f visualTrans = new Vector3f();
+    final Vector3f visualRot = new Vector3f();
 
     //LAB_8010ded8
     for(int i = 0; i < this.parts_08.length; i++) {
       final GoldDragoonTransformEffectInstance84 instance = this.parts_08[i];
       if(instance.used_00) {
-        this.transforms.rotationXYZ(instance.rot_38);
-        this.transforms.transfer.set(instance.trans_08).add(manager.params_10.trans_04);
+        if(this.ticked) {
+          instance.prevTrans.lerp(instance.trans_08, alpha, visualTrans);
+          instance.prevRot.lerp(instance.rot_38, alpha, visualRot);
+        } else {
+          visualTrans.set(instance.trans_08);
+          visualRot.set(instance.rot_38);
+        }
+
+        this.transforms.rotationXYZ(visualRot);
+        this.transforms.transfer.set(visualTrans).add(manager.params_10.trans_04);
         this.transforms.scale(manager.params_10.scale_16);
 
         dobj2.tmd_08 = instance.tmd_70;

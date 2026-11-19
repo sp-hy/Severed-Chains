@@ -35,6 +35,17 @@ public class WhyIsThereANoParticle extends ParticleEffectData98 {
     }
   }
 
+  /** The retail renderer (which did the particle simulation) was a no-op for this type, so this doesn't simulate either */
+  @Override
+  public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
+
+  }
+
+  @Override
+  protected void tickInstance(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectInstance94 inst) {
+
+  }
+
   @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
 

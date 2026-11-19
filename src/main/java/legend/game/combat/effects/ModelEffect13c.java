@@ -97,7 +97,7 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
           .backgroundColour(GTE.backgroundColour)
           .ctmdFlags(0x20 | ((part.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0))
           .tmdTranslucency(tmdGp0Tpage_1f8003ec >>> 5 & 0b11)
-          .battleColour(((Battle)currentEngineState_8004dd04)._800c6930.colour_00);
+          .battleColour(((Battle)currentEngineState_8004dd04).getRenderBattleColour());
 
         part.attribute_00 = oldAttrib;
       }
@@ -157,7 +157,9 @@ public class ModelEffect13c implements Effect<EffectManagerParams.AnimType> {
       }
 
       //LAB_800ea574
-      this.applyManagerPose(manager, manager.battle.animationDisplayTicks(manager.params_10.ticks_24));
+      // TMD/CMB anims are scaled by tickMultiplier, but LmbType0#apply still expects 20 Hz logic ticks
+      final int animationTicks = this.model_134.anim_08 instanceof Model124.LmbAnim ? manager.params_10.ticks_24 : manager.battle.animationDisplayTicks(manager.params_10.ticks_24);
+      this.applyManagerPose(manager, animationTicks);
 
       final Model124 model = this.model_134;
 

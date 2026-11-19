@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static legend.core.GameEngine.AUDIO_THREAD;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.core.GameEngine.SEQUENCER;
 import static legend.core.GameEngine.SPU;
 import static legend.game.DrgnFiles.loadDrgnDir;
@@ -220,7 +221,7 @@ public final class Audio {
 
       if(queuedSound.type_00 != 0 && queuedSound.type_00 != 4) {
         if(queuedSound.initialDelay_24 != 0) {
-          queuedSound.initialDelay_24--;
+          queuedSound.initialDelay_24 -= SCRIPTS.getSubTicksThisFrame();
 
           if(queuedSound.initialDelay_24 <= 0) {
             queuedSound.initialDelay_24 = 0;
@@ -233,7 +234,7 @@ public final class Audio {
           }
           //LAB_8001a564
         } else if(queuedSound.repeatDelayTotal_20 != 0) {
-          queuedSound.repeatDelayCurrent_22--;
+          queuedSound.repeatDelayCurrent_22 -= SCRIPTS.getSubTicksThisFrame();
 
           if(queuedSound.repeatDelayCurrent_22 <= 0) {
             startQueuedSound(queuedSound);

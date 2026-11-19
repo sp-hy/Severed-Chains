@@ -28,7 +28,7 @@ import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.GsSetRefView2L;
 import static legend.game.Graphics.getProjectionPlaneDistance;
 import static legend.game.Graphics.setProjectionPlaneDistance;
-import static legend.game.Graphics.vsyncMode_8007a3b8;
+import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Scus94491BpeSegment.simpleRand;
 import static legend.game.Scus94491BpeSegment_800b.encounter;
 import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
@@ -1103,6 +1103,18 @@ public class BattleCamera {
     this.rview2_00.set(this.interpEnd);
   }
 
+  /**
+   * The projection plane distance as of the latest logic tick. {@link legend.game.Graphics#getProjectionPlaneDistance()}
+   * holds the interpolated value used for rendering, so logic (scripts) should read this instead.
+   */
+  public float getLogicProjectionPlaneDistance() {
+    if(!this.interpInitialized || this.interpEndProjectionPlaneDistance <= 0.0f) {
+      return getProjectionPlaneDistance();
+    }
+
+    return this.interpEndProjectionPlaneDistance;
+  }
+
   /** Include script camera/FOV writes from this logic frame in the interpolation target. */
   public void captureLogicPose() {
     if(!this.interpInitialized) {
@@ -1684,7 +1696,7 @@ public class BattleCamera {
       //LAB_800daabc
       final int x;
       final int y;
-      final int type = tickCount_800bb0fc / Math.max(1, vsyncMode_8007a3b8) & 0x3;
+      final int type = tickCount_800bb0fc / currentEngineState_8004dd04.tickMultiplier() & 0x3;
       if(type == 0) {
         //LAB_800dab04
         x = this.cameraWobbleOffsetX_800c67e4;

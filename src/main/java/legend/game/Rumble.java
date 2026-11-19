@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.PLATFORM;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.EngineStates.currentEngineState_8004dd04;
 import static legend.game.Graphics.vsyncMode_8007a3b8;
 
@@ -111,7 +112,8 @@ public final class Rumble {
 
   @Method(0x8002bda4L)
   public static void adjustRumbleOverTime(final int pad, final int intensity, final int frames) {
-    final int divisor = vsyncMode_8007a3b8 * currentEngineState_8004dd04.tickMultiplier();
+    // Engine states with a fixed logic rate send frames in logic ticks, not display frames
+    final int divisor = SCRIPTS.hasFixedTickRate() ? vsyncMode_8007a3b8 : vsyncMode_8007a3b8 * currentEngineState_8004dd04.tickMultiplier();
     adjustRumbleOverTime(pad, intensity, frames, divisor);
   }
 

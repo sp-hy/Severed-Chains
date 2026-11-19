@@ -22,6 +22,8 @@ public class LightningBoltEffectSegment30 {
   public float originTranslationMagnitude_2c;
   /** Was 8-bit fixed-point short */
   public float baseVertexTranslationScale_2e;
+  /** Random [0, 1) rolled once per logic tick for the type 1 renderer's centre line jitter (retail rolled it every frame) */
+  public float centreLineJitter;
 
   public LightningBoltEffectSegment30(final int index) {
     this.index = index;

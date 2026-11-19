@@ -11,6 +11,7 @@ import org.joml.Vector2f;
 
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.Battle.seed_800fa754;
 import static legend.game.combat.SEffe.getRelativeOffset;
 import static legend.game.combat.SEffe.rotateAndTranslateEffect;
@@ -113,6 +114,8 @@ public class AdditionSparksEffect08 implements Effect<EffectManagerParams.VoidTy
         .build();
     }
 
+    final float fadeRemaining = 1.0f - SCRIPTS.getInterpAlpha();
+
     //LAB_800d0a7c
     float s7 = 0;
     for(int i = 0; i < this.count_00; i++) {
@@ -143,7 +146,8 @@ public class AdditionSparksEffect08 implements Effect<EffectManagerParams.VoidTy
           end.y += GPU.getOffsetY();
           RENDERER.queueLine(this.spark, this.transforms, (s7 + a3) * 4.0f, start, end)
             .translucency(Translucency.B_PLUS_F)
-            .colour((inst.r_40 >>> 8) / 255.0f, (inst.g_42 >>> 8) / 255.0f, (inst.b_44 >>> 8) / 255.0f);
+            // Retail drew before fading; the ticker has already applied this tick's fade, so fade from the pre-step colour
+            .colour((inst.r_40 + inst.stepR_46 * fadeRemaining) / 256.0f / 255.0f, (inst.g_42 + inst.stepG_48 * fadeRemaining) / 256.0f / 255.0f, (inst.b_44 + inst.stepB_4a * fadeRemaining) / 256.0f / 255.0f);
         }
       }
 

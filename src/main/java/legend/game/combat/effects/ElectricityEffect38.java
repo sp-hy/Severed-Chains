@@ -146,6 +146,11 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
         segment.innerColour_10.sub(segment.innerColourFadeStep_1c);
         segment.outerColour_16.sub(segment.outerColourFadeStep_22);
         segment.unused_2a += type0 ? this.boltAngleStep_10 / 2.0f : this.boltAngleStep_10;
+
+        // Roll the type 1 jitter at logic rate so it doesn't re-randomise on every display frame
+        if(!type0 && !this.type1RendererType_18) {
+          segment.centreLineJitter = seed_800fa754.nextFloat();
+        }
       }
     }
   }
@@ -565,7 +570,7 @@ public class ElectricityEffect38 implements Effect<EffectManagerParams.Electrici
               currentSegmentOrigin = segmentArray[segmentNum];
               nextSegmentOrigin = segmentArray[segmentNum + 1];
               float centerLineEndpointX = Math.abs(currentSegmentOrigin.x_00 - nextSegmentOrigin.x_00);
-              centerLineEndpointX = seed_800fa754.nextFloat(centerLineEndpointX * 2 + 1) - centerLineEndpointX + currentSegmentOrigin.x_00;
+              centerLineEndpointX = currentSegment.centreLineJitter * (centerLineEndpointX * 2 + 1) - centerLineEndpointX + currentSegmentOrigin.x_00;
               float centerLineOriginX = currentSegmentOrigin.x_00;
               float centerLineOriginY = currentSegmentOrigin.y_04;
               float centerLineEndpointY = (nextSegmentOrigin.y_04 - currentSegmentOrigin.y_04) / 2 + currentSegmentOrigin.y_04;

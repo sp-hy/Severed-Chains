@@ -79,10 +79,39 @@ public abstract class ParticleEffectData98 implements Effect<EffectManagerParams
 
   protected abstract void init(final int flags);
 
+  /**
+   * Particle simulation was originally done in the renderer (once per 20 Hz frame). It's done here on logic ticks
+   * instead so particles behave the same at any display frame rate, and the renderers interpolate between ticks.
+   */
   @Override
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
+    final EffectManagerData6c<EffectManagerParams.ParticleType> manager = state.innerStruct_00;
+    this.countFramesRendered_52++;
 
+    for(int i = 0; i < this.countParticleInstance_50; i++) {
+      final ParticleEffectInstance94 inst = this.particleArray_68[i];
+      final boolean wasVisible = inst.visible;
+
+      inst.storePreviousVisuals();
+      inst.visible = inst.tick(manager);
+
+      if(inst.visible) {
+        this.tickInstance(manager, inst);
+
+        // Just spawned (or respawned) - don't interpolate from wherever it was before
+        if(!wasVisible) {
+          inst.storePreviousVisuals();
+        }
+      }
+    }
+
+    if(this.scaleOrUseEffectAcceleration_6c) {
+      this.effectAcceleration_70.mul(this.scaleParticleAcceleration_80);
+    }
   }
+
+  /** Simulates one logic tick of a live particle instance (the non-drawing half of the original renderers) */
+  protected abstract void tickInstance(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectInstance94 inst);
 
   @Override
   public abstract void render(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state);

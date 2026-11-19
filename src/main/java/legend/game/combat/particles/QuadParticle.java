@@ -23,6 +23,7 @@ import java.util.Arrays;
 import static legend.core.GameEngine.CONFIG;
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.GetClut;
 import static legend.game.Graphics.worldToScreenMatrix_800c3548;
 import static legend.game.combat.Battle.ZERO;
@@ -84,15 +85,57 @@ public class QuadParticle extends ParticleEffectData98 {
     //LAB_801011a0
     //LAB_801011d8
     for(int i = 0; i < this.countParticleSub_54; i++) {
-      this.FUN_800fca78(manager, this, inst, inst.particlePosition_50, inst.particleInstanceSubArray_80[i].transforms);
+      this.FUN_800fca78(manager, this, inst, inst.managerRotation_68, inst.particlePosition_50, inst.scaleHorizontal_06, inst.scaleVertical_08, inst.angle_0e, inst.particlePositionCopy2_48, inst.particlePosition_50, inst.particleInstanceSubArray_80[i].transforms);
+
+      if((manager.params_10.flags_24 & 0x2) != 0) {
+        inst.particlePositionCopy2_48.set(inst.particlePosition_50);
+      }
     }
+
+    if(this.countParticleSub_54 != 0) {
+      inst.trailTickTransforms.set(inst.particleInstanceSubArray_80[0].transforms);
+    }
+  }
+
+  @Override
+  protected void tickInstance(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectInstance94 inst) {
+    //LAB_800fe1bc
+    // The trail is in screen space so it's shifted by the renderer, see render
+    inst.trailShiftPending = true;
+
+    //LAB_800fe1fc
+    inst.beforeRender(manager);
+    inst.tickAttributes(manager, inst.colour);
+
+    inst.halfBright = (this.effectInner_08.particleInnerStuff_1c & 0x1000_0000) != 0 && (inst.flags_90 & 0x8) != 0;
+
+    //LAB_800fe28c
+    inst.flags_90 = inst.flags_90 & 0xffff_fff7 | (~(inst.flags_90 >>> 3) & 0x1) << 3;
+
+    if((manager.params_10.flags_00 & 0x400_0000) == 0) {
+      inst.managerRotation_68.y = this.cameraFacingAngle(inst.particlePosition_50);
+    }
+
+    // Direction of travel (originally tracked by FUN_800fca78 when drawing)
+    if((manager.params_10.flags_24 & 0x2) != 0) {
+      inst.headingFrom.set(inst.particlePositionCopy2_48);
+      inst.particlePositionCopy2_48.set(inst.particlePosition_50);
+    }
+  }
+
+  private float cameraFacingAngle(final Vector3f position) {
+    // This is super bugged in retail and passes garbage as the last 3 params to both methods.
+    // Hopefully this is fine with them all zeroed. This is used for the Glare's bewitching attack.
+    return MathHelper.atan2(
+      this.manager.camera.refpointRawComponent(0, null, ZERO) - position.x,
+      this.manager.camera.refpointRawComponent(2, null, ZERO) - position.z
+    ) + MathHelper.TWO_PI / 4.0f;
   }
 
   @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
     final EffectManagerData6c<EffectManagerParams.ParticleType> manager = state.innerStruct_00;
-
-    this.countFramesRendered_52++;
+    final float alpha = SCRIPTS.getInterpAlpha();
 
     if(this.obj == null) {
       final QuadBuilder builder = new QuadBuilder("Particle")
@@ -114,44 +157,50 @@ public class QuadParticle extends ParticleEffectData98 {
     final Vector3f colour = new Vector3f();
     final Vector3f colourMod = new Vector3f();
     final Vector3f colourStep = new Vector3f();
+    final Vector3f rotation = new Vector3f();
 
     //LAB_800fe180
     for(int i = 0; i < this.countParticleInstance_50; i++) {
       final ParticleEffectInstance94 inst = this.particleArray_68[i];
 
-      if(inst.tick(manager)) {
+      // Simulation happens on logic ticks, see tickInstance
+      if(inst.visible) {
+        inst.interpolateVisuals(alpha);
+
         //LAB_800fe1bc
-        for(int j = this.countParticleSub_54 - 1; j > 0; j--) {
-          inst.particleInstanceSubArray_80[j].copy(inst.particleInstanceSubArray_80[j - 1]);
+        // Shift the trail along on the first frame after a logic tick. The newest segment is what was drawn on the
+        // last logic tick frame (not the last display frame) so the trail spacing matches the original.
+        final boolean shiftTrail = inst.trailShiftPending;
+        if(shiftTrail) {
+          inst.trailShiftPending = false;
+
+          for(int j = this.countParticleSub_54 - 1; j > 1; j--) {
+            inst.particleInstanceSubArray_80[j].copy(inst.particleInstanceSubArray_80[j - 1]);
+          }
+
+          if(this.countParticleSub_54 > 1) {
+            inst.particleInstanceSubArray_80[1].transforms.set(inst.trailTickTransforms);
+          }
         }
 
-        //LAB_800fe1fc
-        inst.beforeRender(manager);
-        inst.tickAttributes(manager, colour);
+        colour.set(inst.renderColour);
 
-        if((this.effectInner_08.particleInnerStuff_1c & 0x1000_0000) == 0 || (inst.flags_90 & 0x8) == 0) {
+        if(!inst.halfBright) {
           //LAB_800fe280
           colourMod.set(0, 0, 0);
         } else {
           colourMod.set(colour).negate().div(2.0f);
         }
 
-        //LAB_800fe28c
-        inst.flags_90 = inst.flags_90 & 0xffff_fff7 | (~(inst.flags_90 >>> 3) & 0x1) << 3;
-
+        rotation.set(inst.managerRotation_68);
         if((manager.params_10.flags_00 & 0x400_0000) == 0) {
-          // This is super bugged in retail and passes garbage as the last 3 params to both methods.
-          // Hopefully this is fine with them all zeroed. This is used for the Glare's bewitching attack.
-          inst.managerRotation_68.y = MathHelper.atan2(
-            this.manager.camera.refpointRawComponent(0, null, ZERO) - inst.particlePosition_50.x,
-            this.manager.camera.refpointRawComponent(2, null, ZERO) - inst.particlePosition_50.z
-          ) + MathHelper.TWO_PI / 4.0f;
+          rotation.y = this.cameraFacingAngle(inst.renderPosition);
         }
 
         //LAB_800fe300
         MathHelper.clamp(colour.add(colourMod), 0.0f, 1.0f);
 
-        final float instZ = this.FUN_800fca78(manager, this, inst, inst.particlePosition_50, this.transforms) / 4.0f;
+        final float instZ = this.FUN_800fca78(manager, this, inst, rotation, inst.renderPosition, inst.renderScaleHorizontal, inst.renderScaleVertical, inst.renderAngle, inst.headingFrom, inst.particlePosition_50, this.transforms) / 4.0f;
         float effectZ = manager.params_10.z_22;
         if(effectZ + instZ >= 160) {
           if(effectZ + instZ >= 4094) {
@@ -170,6 +219,10 @@ public class QuadParticle extends ParticleEffectData98 {
           ParticleEffectInstance94Sub10 particleSub = inst.particleInstanceSubArray_80[0];
           particleSub.transforms.set(this.transforms);
           colourStep.set(colour).div(this.countParticleSub_54);
+
+          if(shiftTrail) {
+            inst.trailTickTransforms.set(this.transforms);
+          }
 
           final int count = Math.min(-inst.framesUntilRender_04, this.countParticleSub_54);
 
@@ -204,9 +257,7 @@ public class QuadParticle extends ParticleEffectData98 {
     }
 
     //LAB_800fe7ec
-    if(this.scaleOrUseEffectAcceleration_6c) {
-      this.effectAcceleration_70.mul(this.scaleParticleAcceleration_80);
-    }
+    // Effect acceleration is scaled on logic ticks, see ParticleEffectData98#tick
     //LAB_800fe848
   }
 
@@ -242,15 +293,19 @@ public class QuadParticle extends ParticleEffectData98 {
     //LAB_800fca5c
   }
 
-  /** Returns Z */
+  /**
+   * Returns Z. Takes the visual values explicitly so it can draw interpolated values. The direction of travel is
+   * calculated from headingFrom to headingTo (originally the last drawn position and translation, with the last
+   * drawn position being updated here - that's now handled by the callers).
+   */
   @Method(0x800fca78L)
-  private float FUN_800fca78(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectData98 particle, final ParticleEffectInstance94 instance, final Vector3f translation, final MV transforms) {
+  private float FUN_800fca78(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectData98 particle, final ParticleEffectInstance94 instance, final Vector3f managerRotation, final Vector3f translation, final float scaleHorizontal, final float scaleVertical, final float particleAngle, final Vector3f headingFrom, final Vector3f headingTo, final MV transforms) {
     final Vector2f ref = new Vector2f();
-    final float z = FUN_800cfc20(instance.managerRotation_68, instance.managerTranslation_2c, translation, ref);
+    final float z = FUN_800cfc20(managerRotation, instance.managerTranslation_2c, translation, ref);
     if(z >= 40) {
       final float zScale = (float)0x5000 / z;
-      final float horizontalScale = zScale * (manager.params_10.scale_16.x + instance.scaleHorizontal_06);
-      final float verticalScale = zScale * (manager.params_10.scale_16.y + instance.scaleVertical_08);
+      final float horizontalScale = zScale * (manager.params_10.scale_16.x + scaleHorizontal);
+      final float verticalScale = zScale * (manager.params_10.scale_16.y + scaleVertical);
 
       final float angle;
       if((manager.params_10.flags_24 & 0x2) != 0) {
@@ -259,12 +314,11 @@ public class QuadParticle extends ParticleEffectData98 {
 
         //LAB_800fcb90
         //LAB_800fcbd4
-        final float sp18 = (instance.particlePositionCopy2_48.z - translation.z) * -org.joml.Math.abs(MathHelper.sin(sp0x38.y - manager.params_10.rot_10.y)) - (translation.x - instance.particlePositionCopy2_48.x) * -Math.abs(MathHelper.cos(sp0x38.y + manager.params_10.rot_10.y));
-        final float sp1c = translation.y - instance.particlePositionCopy2_48.y;
+        final float sp18 = (headingFrom.z - headingTo.z) * -org.joml.Math.abs(MathHelper.sin(sp0x38.y - manager.params_10.rot_10.y)) - (headingTo.x - headingFrom.x) * -Math.abs(MathHelper.cos(sp0x38.y + manager.params_10.rot_10.y));
+        final float sp1c = headingTo.y - headingFrom.y;
         angle = -MathHelper.atan2(sp1c, sp18) + MathHelper.TWO_PI / 4.0f;
-        instance.particlePositionCopy2_48.set(translation);
       } else {
-        angle = instance.angle_0e + manager.params_10.rot_10.x - MathHelper.TWO_PI / 1.6f;
+        angle = particleAngle + manager.params_10.rot_10.x - MathHelper.TWO_PI / 1.6f;
       }
 
       transforms.transfer.x = ref.x;

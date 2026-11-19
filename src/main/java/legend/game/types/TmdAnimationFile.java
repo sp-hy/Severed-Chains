@@ -61,7 +61,7 @@ public class TmdAnimationFile extends Anim {
 
     //LAB_800dd4fc
     if(model.disableInterpolation_a2) {
-      model.currentKeyframe_94 = frame / tickMultiplier;
+      model.currentKeyframe_94 = frame / framesPerKeyframe;
       applyKeyframe(model);
     } else {
       //LAB_800dd568
@@ -78,7 +78,8 @@ public class TmdAnimationFile extends Anim {
     }
 
     //LAB_800dd5f0
-    model.remainingFrames_9e = totalFrames - frame - 1;
+    // Count in logic ticks: display-frame positions can skip the final frame, which would leave the animation stuck
+    model.remainingFrames_9e = (totalFrames - frame - 1) / tickMultiplier;
 
     if(model.remainingFrames_9e == 0) {
       model.animationState_9c = 0;

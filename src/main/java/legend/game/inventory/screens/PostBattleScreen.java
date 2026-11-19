@@ -42,6 +42,7 @@ import static legend.core.GameEngine.EVENTS;
 import static legend.core.GameEngine.PLATFORM;
 import static legend.core.GameEngine.REGISTRIES;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.FullScreenEffects.fullScreenEffect_800bb140;
 import static legend.game.FullScreenEffects.startFadeEffect;
 import static legend.game.Graphics.renderMode;
@@ -81,6 +82,8 @@ public class PostBattleScreen extends MenuScreen {
   private final MV transforms = new MV();
 
   private int unlockHeight_8011e178;
+  /** {@link #unlockHeight_8011e178} as of the previous logic tick, for interpolating between ticks */
+  private int lastUnlockHeight;
   private int soundTick_8011e17c;
   private final Object2IntMap<CharacterData2c> pendingXp_8011e180 = new Object2IntLinkedOpenHashMap<>();
   private final Object2IntMap<CharacterData2c> levelsGained_8011e1c8 = new Object2IntLinkedOpenHashMap<>();
@@ -94,9 +97,29 @@ public class PostBattleScreen extends MenuScreen {
   private final MeshObj[] resultsBackgroundObj = new MeshObj[6];
   private final MV resultsBackgroundTransforms = new MV();
 
+  /**
+   * This screen is shown while the battle engine state is still active. Battle logic runs at a fixed rate decoupled
+   * from the display, so the counters and animations here (authored per battle frame) only step on logic ticks.
+   */
+  private static boolean isLogicTick() {
+    return !SCRIPTS.hasFixedTickRate() || SCRIPTS.willTick();
+  }
+
+  private float getUnlockHeight() {
+    if(!SCRIPTS.hasFixedTickRate()) {
+      return this.unlockHeight_8011e178;
+    }
+
+    return org.joml.Math.lerp(this.lastUnlockHeight, this.unlockHeight_8011e178, SCRIPTS.getInterpAlpha());
+  }
+
   @Method(0x8010d614L)
   @Override
   protected void render() {
+    if(isLogicTick()) {
+      this.lastUnlockHeight = this.unlockHeight_8011e178;
+    }
+
     switch(this.inventoryMenuState_800bdc28) {
       case INIT_0 -> {
         clearRenderables();
@@ -227,6 +250,7 @@ public class PostBattleScreen extends MenuScreen {
           if(foundPrimary) {
             this.inventoryMenuState_800bdc28 = MenuState.EMBIGGEN_UNLOCKED_ADDITIONS_6;
             this.unlockHeight_8011e178 = 0;
+            this.lastUnlockHeight = 0;
           } else {
             this.inventoryMenuState_800bdc28 = MenuState.SECONDARY_ADDITION;
           }
@@ -249,6 +273,7 @@ public class PostBattleScreen extends MenuScreen {
           if(foundPrimary) {
             this.inventoryMenuState_800bdc28 = MenuState.EMBIGGEN_SPELL_UNLOCK_12;
             this.unlockHeight_8011e178 = 0;
+            this.lastUnlockHeight = 0;
           } else {
             this.inventoryMenuState_800bdc28 = MenuState.SECONDARY_SPELL;
           }
@@ -261,6 +286,12 @@ public class PostBattleScreen extends MenuScreen {
       }
 
       case TICK_GOLD_4 -> {
+        // Count up at the logic rate, but skip to the end as soon as confirm is pressed
+        if(!isLogicTick() && !PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
+          this.drawReport();
+          break;
+        }
+
         final int goldTick;
         if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
           goldTick = goldGainedFromCombat_800bc920;
@@ -300,6 +331,12 @@ public class PostBattleScreen extends MenuScreen {
       }
 
       case TICK_XP_5 -> {
+        // Count up at the logic rate, but skip to the end as soon as confirm is pressed
+        if(!isLogicTick() && !PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
+          this.drawReport();
+          break;
+        }
+
         final boolean moreXpToGive = this.givePendingXp() || this.givePendingDxp();
 
         if(moreXpToGive) {
@@ -311,6 +348,7 @@ public class PostBattleScreen extends MenuScreen {
         } else {
           totalXpFromCombat_800bc95c = 0;
           this.unlockHeight_8011e178 = 0;
+          this.lastUnlockHeight = 0;
           this.inventoryMenuState_800bdc28 = MenuState.CHECK_NEXT_THING_TO_GIVE;
         }
 
@@ -341,7 +379,9 @@ public class PostBattleScreen extends MenuScreen {
 
       case EMBIGGEN_UNLOCKED_ADDITIONS_6 -> {
         if(this.unlockHeight_8011e178 < 20) {
-          this.unlockHeight_8011e178 += 2;
+          if(isLogicTick()) {
+            this.unlockHeight_8011e178 += 2;
+          }
         } else {
           //LAB_8010dcc8
           if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
@@ -354,13 +394,17 @@ public class PostBattleScreen extends MenuScreen {
 
         //LAB_8010dcf4
         //LAB_8010dcf8
-        this.renderAdditionsUnlocked(this.unlockHeight_8011e178);
+        this.renderAdditionsUnlocked(this.getUnlockHeight());
         this.drawReport();
       }
 
       case ENSMALLEN_UNLOCKED_ADDITIONS_7 -> {
-        this.renderAdditionsUnlocked(this.unlockHeight_8011e178);
+        this.renderAdditionsUnlocked(this.getUnlockHeight());
         this.drawReport();
+
+        if(!isLogicTick()) {
+          break;
+        }
 
         if(this.unlockHeight_8011e178 > 0) {
           this.unlockHeight_8011e178 -= 2;
@@ -398,7 +442,9 @@ public class PostBattleScreen extends MenuScreen {
 
       case EMBIGGEN_SPELL_UNLOCK_12 -> {
         if(this.unlockHeight_8011e178 < 20) {
-          this.unlockHeight_8011e178 += 2;
+          if(isLogicTick()) {
+            this.unlockHeight_8011e178 += 2;
+          }
         } else {
           //LAB_8010def4
           if(PLATFORM.isActionPressed(INPUT_ACTION_MENU_CONFIRM.get())) {
@@ -411,13 +457,17 @@ public class PostBattleScreen extends MenuScreen {
 
         //LAB_8010df20
         //LAB_8010df24
-        this.renderSpellsUnlocked(this.unlockHeight_8011e178);
+        this.renderSpellsUnlocked(this.getUnlockHeight());
         this.drawReport();
       }
 
       case ENSMALLEN_SPELL_UNLOCK_13 -> {
-        this.renderSpellsUnlocked(this.unlockHeight_8011e178);
+        this.renderSpellsUnlocked(this.getUnlockHeight());
         this.drawReport();
+
+        if(!isLogicTick()) {
+          break;
+        }
 
         if(this.unlockHeight_8011e178 > 0) {
           this.unlockHeight_8011e178 -= 2;
@@ -703,7 +753,7 @@ public class PostBattleScreen extends MenuScreen {
   }
 
   @Method(0x8010d078L)
-  private void drawResultsBackground(int x, final int y, final int w, final int h, final int type) {
+  private void drawResultsBackground(float x, final float y, final float w, final float h, final int type) {
     if(this.resultsBackgroundObj[type - 1] != null) {
       x -= 8;
       //y += 120;
@@ -939,7 +989,7 @@ public class PostBattleScreen extends MenuScreen {
   }
 
   @Method(0x8010ebecL)
-  private void renderAdditionsUnlocked(final int height) {
+  private void renderAdditionsUnlocked(final float height) {
     for(int i = 0; i < gameState_800babc8.charIds_88.size(); i++) {
       final CharacterData2c character = gameState_800babc8.getCharacterBySlot(i);
 
@@ -950,7 +1000,7 @@ public class PostBattleScreen extends MenuScreen {
   }
 
   @Method(0x8010ec6cL)
-  private void renderSpellsUnlocked(final int height) {
+  private void renderSpellsUnlocked(final float height) {
     //LAB_8010ec98
     for(int i = 0; i < gameState_800babc8.charIds_88.size(); i++) {
       final CharacterData2c character = gameState_800babc8.getCharacterBySlot(i);
@@ -964,7 +1014,7 @@ public class PostBattleScreen extends MenuScreen {
   }
 
   @Method(0x8010d398L)
-  private void renderAdditionUnlocked(final int x, final int y, final Addition addition, final int height) {
+  private void renderAdditionUnlocked(final int x, final int y, final Addition addition, final float height) {
     this.drawResultsBackground(x, y + 20 - height, 134, (height + 1) * 2, 4);
     this.drawResultsBackground(x + 1, y + 20 - height + 1, 132, height * 2, 3);
 
@@ -978,7 +1028,7 @@ public class PostBattleScreen extends MenuScreen {
   }
 
   @Method(0x8010d498L)
-  private void renderSpellUnlocked(final int x, final int y, final SpellStats0c spell, final int height) {
+  private void renderSpellUnlocked(final int x, final int y, final SpellStats0c spell, final float height) {
     this.drawResultsBackground(x, y + 20 - height, 134, (height + 1) * 2, 6); // New spell border
     this.drawResultsBackground(x + 1, y + 20 - height + 1, 132, height * 2, 5); // New spell background
 

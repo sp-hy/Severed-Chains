@@ -19,6 +19,7 @@ import java.util.Arrays;
 
 import static legend.core.GameEngine.GPU;
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.combat.SEffe.FUN_800cfc20;
 
 public class LineParticle extends ParticleEffectData98 {
@@ -50,40 +51,51 @@ public class LineParticle extends ParticleEffectData98 {
   }
 
   @Override
+  protected void tickInstance(final EffectManagerData6c<EffectManagerParams.ParticleType> manager, final ParticleEffectInstance94 inst) {
+    //LAB_800fd918
+    for(int j = this.countParticleSub_54 - 1; j > 0; j--) {
+      inst.subParticlePositionsArray_44[j].set(inst.subParticlePositionsArray_44[j - 1]);
+    }
+
+    //LAB_800fd950
+    if(this.countParticleSub_54 != 0) {
+      inst.subParticlePositionsArray_44[0].set(inst.particlePosition_50);
+    }
+
+    inst.beforeRender(manager);
+    inst.tickAttributes(manager, inst.colour);
+
+    inst.halfBright = (this.effectInner_08.particleInnerStuff_1c & 0x1000_0000) != 0 && (inst.flags_90 & 0x8) != 0;
+
+    //LAB_800fda00
+    inst.flags_90 = inst.flags_90 & 0xffff_fff7 | (~(inst.flags_90 >>> 3) & 0x1) << 3;
+  }
+
+  @Override
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.ParticleType>> state) {
     final EffectManagerData6c<EffectManagerParams.ParticleType> manager = state.innerStruct_00;
-    this.countFramesRendered_52++;
+    final float alpha = SCRIPTS.getInterpAlpha();
 
-    if(this.countParticleInstance_50 != 0) {
+    if(this.countParticleInstance_50 != 0 && this.countParticleSub_54 != 0) {
       final ParticleMetrics48 particleMetrics = new ParticleMetrics48();
 
       //LAB_800fd8dc
       for(int i = 0; i < this.countParticleInstance_50; i++) {
         final ParticleEffectInstance94 inst = this.particleArray_68[i];
 
-        if(inst.tick(manager)) {
-          //LAB_800fd918
-          for(int j = this.countParticleSub_54 - 1; j > 0; j--) {
-            inst.subParticlePositionsArray_44[j].set(inst.subParticlePositionsArray_44[j - 1]);
-          }
+        // Simulation happens on logic ticks, see tickInstance
+        if(inst.visible) {
+          inst.interpolateVisuals(alpha);
 
-          //LAB_800fd950
-          inst.subParticlePositionsArray_44[0].set(inst.particlePosition_50);
-          inst.beforeRender(manager);
-
-          final Vector3f colour = new Vector3f();
-          inst.tickAttributes(manager, colour);
+          final Vector3f colour = new Vector3f(inst.renderColour);
 
           final Vector3f colourMod = new Vector3f();
-          if((this.effectInner_08.particleInnerStuff_1c & 0x1000_0000) == 0 || (inst.flags_90 & 0x8) == 0) {
+          if(!inst.halfBright) {
             //LAB_800fd9f4
             colourMod.set(0, 0, 0);
           } else {
             colourMod.set(colour).negate().div(2.0f);
           }
-
-          //LAB_800fda00
-          inst.flags_90 = inst.flags_90 & 0xffff_fff7 | (~(inst.flags_90 >>> 3) & 0x1) << 3;
 
           //LAB_800fda58
           //LAB_800fda90
@@ -100,7 +112,7 @@ public class LineParticle extends ParticleEffectData98 {
           final Vector3f stepColour = new Vector3f();
           stepColour.set(colour).div(this.countParticleSub_54);
 
-          float z = FUN_800cfc20(inst.managerRotation_68, inst.managerTranslation_2c, inst.subParticlePositionsArray_44[0], particleMetrics.p0) / 4;
+          float z = FUN_800cfc20(inst.managerRotation_68, inst.managerTranslation_2c, inst.renderSubParticlePositions[0], particleMetrics.p0) / 4;
 
           if(z + manager.params_10.z_22 >= 0xa0) {
             if(z + manager.params_10.z_22 >= 0xffe) {
@@ -116,7 +128,7 @@ public class LineParticle extends ParticleEffectData98 {
               colour.sub(stepColour);
               particleMetrics.colour1_44.set(colour.x, colour.y, colour.z);
 
-              FUN_800cfc20(inst.managerRotation_68, inst.managerTranslation_2c, inst.subParticlePositionsArray_44[k], particleMetrics.p1);
+              FUN_800cfc20(inst.managerRotation_68, inst.managerTranslation_2c, inst.renderSubParticlePositions[k], particleMetrics.p1);
               this.renderLineParticles(manager, particleMetrics);
               particleMetrics.p0.set(particleMetrics.p1);
             }
@@ -126,9 +138,7 @@ public class LineParticle extends ParticleEffectData98 {
     }
 
     //LAB_800fdd44
-    if(this.scaleOrUseEffectAcceleration_6c) {
-      this.effectAcceleration_70.mul(this.scaleParticleAcceleration_80);
-    }
+    // Effect acceleration is scaled on logic ticks, see ParticleEffectData98#tick
 
     //LAB_800fdda0
   }

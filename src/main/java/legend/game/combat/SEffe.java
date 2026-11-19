@@ -361,7 +361,7 @@ public final class SEffe {
       .backgroundColour(GTE.backgroundColour)
       .ctmdFlags(0x20 | ((dobj2.attribute_00 & 0x4000_0000) != 0 ? 0x12 : 0x0))
       .tmdTranslucency(tmdGp0Tpage_1f8003ec >>> 5 & 0b11)
-      .battleColour(((Battle)currentEngineState_8004dd04)._800c6930.colour_00);
+      .battleColour(((Battle)currentEngineState_8004dd04).getRenderBattleColour());
 
     //LAB_800de528
   }
@@ -1051,11 +1051,22 @@ public final class SEffe {
       .bufferUsage(BufferUsage.STREAMING)
       .translucency(translucency);
 
+    // The colours fade on logic ticks (colour -= step), interpolate from the previous tick's colour
+    final float fade = 1.0f - SCRIPTS.getInterpAlpha();
+    final Vector3i inner1 = new Vector3i();
+    final Vector3i outer1 = new Vector3i();
+    final Vector3i inner2 = new Vector3i();
+    final Vector3i outer2 = new Vector3i();
+
     for(int s7 = 0; s7 < data.count_00; s7++) {
       //LAB_8010577c
       for(int s6 = 0; s6 < data.count_0c - 1; s6++) {
         final ThunderArrowEffectBolt1e s4_1 = data._18[s7][s6];
         final ThunderArrowEffectBolt1e s4_2 = data._18[s7][s6 + 1];
+        interpolateThunderArrowColour(s4_1.colour_04, s4_1.svec_10, fade, inner1);
+        interpolateThunderArrowColour(s4_1.colour_0a, s4_1.svec_16, fade, outer1);
+        interpolateThunderArrowColour(s4_2.colour_04, s4_2.svec_10, fade, inner2);
+        interpolateThunderArrowColour(s4_2.colour_0a, s4_2.svec_16, fade, outer2);
 
         sp0x18[0].x = s4_2.x_00 - s4_2.size_1c;
         sp0x18[0].y = s4_2.y_02;
@@ -1065,18 +1076,18 @@ public final class SEffe {
         sp0x18[2].y = s4_1.y_02;
         sp0x18[3].x = s4_1.x_00 + 1.0f;
         sp0x18[3].y = s4_1.y_02;
-        renderSegmentGradient(builder, s4_1.colour_0a, s4_2.colour_0a, sp0x18, data.z_14, data._08, translucency);
+        renderSegmentGradient(builder, outer1, outer2, sp0x18, data.z_14, data._08, translucency);
         sp0x18[0].x = s4_2.x_00 - s4_2.size_1c / 3.0f;
         sp0x18[2].x = s4_1.x_00 - s4_1.size_1c / 3.0f;
-        renderSegmentGradient(builder, s4_1.colour_04, s4_2.colour_04, sp0x18, data.z_14, data._08, translucency);
+        renderSegmentGradient(builder, inner1, inner2, sp0x18, data.z_14, data._08, translucency);
         sp0x18[0].x = s4_2.x_00 + s4_2.size_1c;
         sp0x18[1].x = s4_2.x_00;
         sp0x18[2].x = s4_1.x_00 + s4_1.size_1c;
         sp0x18[3].x = s4_1.x_00;
-        renderSegmentGradient(builder, s4_1.colour_0a, s4_2.colour_0a, sp0x18, data.z_14, data._08, translucency);
+        renderSegmentGradient(builder, outer1, outer2, sp0x18, data.z_14, data._08, translucency);
         sp0x18[0].x = s4_2.x_00 + s4_2.size_1c / 3.0f;
         sp0x18[2].x = s4_1.x_00 + s4_1.size_1c / 3.0f;
-        renderSegmentGradient(builder, s4_1.colour_04, s4_2.colour_04, sp0x18, data.z_14, data._08, translucency);
+        renderSegmentGradient(builder, inner1, inner2, sp0x18, data.z_14, data._08, translucency);
       }
     }
 
@@ -1087,6 +1098,15 @@ public final class SEffe {
     RENDERER.queueOrthoModel(obj, data.transforms, QueuedModelStandard.class);
 
     //LAB_801059c8
+  }
+
+  /** The colour as it was before the last logic tick's fade step, lerped towards the current colour */
+  private static Vector3i interpolateThunderArrowColour(final Vector3i colour, final Vector3i step, final float fade, final Vector3i out) {
+    return out.set(
+      colour.x + Math.round(step.x * fade),
+      colour.y + Math.round(step.y * fade),
+      colour.z + Math.round(step.z * fade)
+    );
   }
 
   @Method(0x80105aa0L)
@@ -1355,7 +1375,10 @@ public final class SEffe {
     // Spinner star
     battleUiParts.queueDaddyStar(starX, starY, 0x33, Translucency.B_PLUS_F, (daddySpinnerBrightnessFactor_80119fb4 + 1) * 0x40);
 
-    daddySpinnerBrightnessFactor_80119fb4 = 1 - daddySpinnerBrightnessFactor_80119fb4;
+    // Flicker once per logic tick (originally once per frame at 20 FPS), not once per display frame
+    if(!SCRIPTS.hasFixedTickRate() || SCRIPTS.willTick()) {
+      daddySpinnerBrightnessFactor_80119fb4 = 1 - daddySpinnerBrightnessFactor_80119fb4;
+    }
   }
 
   @Method(0x80108460L)
@@ -1387,11 +1410,15 @@ public final class SEffe {
 
   @Method(0x80108514L)
   public static void renderDragoonAdditionHud(final ScriptState<DragoonAdditionScriptData1c> state, final DragoonAdditionScriptData1c daddy) {
-    renderDragoonAdditionHud_(daddy, 0, daddy.baseAngle_02 - 0x400);
+    // Interpolate the spinner between logic ticks
+    final int angle = daddy.lastBaseAngle + Math.round((daddy.baseAngle_02 - daddy.lastBaseAngle) * SCRIPTS.getInterpAlpha());
+    renderDragoonAdditionHud_(daddy, 0, angle - 0x400);
   }
 
   @Method(0x80108574L)
   public static void tickDragoonAdditionHud(final ScriptState<DragoonAdditionScriptData1c> state, final DragoonAdditionScriptData1c daddy) {
+    daddy.lastBaseAngle = daddy.baseAngle_02;
+
     if(daddy.tickEffect_0f == 0) {
       if(daddy.meterSpinning_10 == 0) {
         daddy.ticksRemainingToBeginAddition_12--;
@@ -1716,6 +1743,7 @@ public final class SEffe {
 
     state.loadScriptFile(doNothingScript_8004f650);
     state.setTicker(VertexDifferenceAnimation18::applyVertexDifferenceAnimation);
+    state.setRenderer(VertexDifferenceAnimation18::renderVertexDifferenceAnimation);
     final DeffTmdRenderer14 source = (DeffTmdRenderer14)sourceState.effect_44;
     final DeffTmdRenderer14 diff = (DeffTmdRenderer14)diffState.effect_44;
     final TmdObjTable1c sourceModel = source.tmd_08;
@@ -1730,12 +1758,14 @@ public final class SEffe {
     animation.current_14 = new Vector3f[sourceModel.n_vert_04];
     Arrays.setAll(animation.step_10, i -> new Vector3f());
     Arrays.setAll(animation.current_14, i -> new Vector3f());
+    animation.previous = new Vector3f[sourceModel.n_vert_04];
     // Set unused static _8011a030 to 1
 
     //LAB_80109e78
     for(int i = 0; i < sourceModel.n_vert_04; i++) {
       final Vector3f sourceVertex = sourceModel.vert_top_00[i];
       animation.current_14[i].set(sourceVertex);
+      animation.previous[i] = new Vector3f(sourceVertex);
     }
 
     //LAB_80109ecc
@@ -2588,9 +2618,10 @@ public final class SEffe {
           final LmbType0 lmb = (LmbType0)a2_0.lmb_0c;
 
           //LAB_801117ac
-          final int tickMultiplier = Math.max(1, effects.battle.tickMultiplier());
-          final int framesPerKeyframe = 2 * tickMultiplier;
-          final int frameIndex = effects.battle.animationDisplayTicks(Math.max(0, effects.params_10.ticks_24)) % (a2_0.keyframeCount_08 * framesPerKeyframe);
+          // Only used by script functions, so this uses the logic tick (not the interpolated display tick) to
+          // return the same value regardless of display frame rate
+          final int framesPerKeyframe = 2;
+          final int frameIndex = Math.max(0, effects.params_10.ticks_24) % (a2_0.keyframeCount_08 * framesPerKeyframe);
           final int keyframeIndex = frameIndex / framesPerKeyframe;
           final LmbTransforms14 lmbTransforms = lmb.partAnimations_08[partIndex].keyframes_08[keyframeIndex];
           scale.set(lmbTransforms.scale_00);

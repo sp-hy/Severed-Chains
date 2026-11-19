@@ -65,6 +65,8 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
   public int numFramesToRenderCenterSquare_38;
   /** ubyte */
   public int lastCompletedHit_39;
+  /** Set by the ticker when the completed-hit centre square should be drawn until the next logic tick */
+  private boolean renderCompletedCentreSquare;
   /** ubyte; 0 = no auto complete, 2 = WC and UW auto-complete */
   public int autoCompleteType_3a;
 
@@ -475,7 +477,7 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
   @Override
   @Method(0x801073d4L)
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
-    final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
+    this.renderCompletedCentreSquare = false;
 
     if(this.pauseTickerAndRenderer_31 == 0) {
       final AdditionOverlaysHit20[] hitArray = this.hitOverlays_40;
@@ -602,9 +604,9 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
           //LAB_80107728
           if(this.numFramesToRenderCenterSquare_38 != 0) {
             this.numFramesToRenderCenterSquare_38--;
-            if(CONFIG.getConfig(CoreMod.ADDITION_OVERLAY_CONFIG.get()) != AdditionOverlayMode.OFF) {
-              this.renderAdditionCentreSolidSquare(this, this.hitOverlays_40[this.lastCompletedHit_39], additionHitCompletionState_8011a014[this.lastCompletedHit_39], manager);
-            }
+            // Retail rendered the completed-hit square here; the ticker only runs at 20 Hz, so flag it and let the
+            // renderer draw it on every display frame until the next logic tick
+            this.renderCompletedCentreSquare = true;
           }
         }
       }
@@ -616,6 +618,11 @@ public class AdditionOverlaysEffect44 implements Effect<EffectManagerParams.Void
   @Method(0x8010726cL)
   public void render(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
     final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
+
+    // Completed-hit square, flagged by the ticker (retail drew this from the ticker)
+    if(this.renderCompletedCentreSquare && CONFIG.getConfig(CoreMod.ADDITION_OVERLAY_CONFIG.get()) != AdditionOverlayMode.OFF) {
+      this.renderAdditionCentreSolidSquare(this, this.hitOverlays_40[this.lastCompletedHit_39], additionHitCompletionState_8011a014[this.lastCompletedHit_39], manager);
+    }
 
     if(this.pauseTickerAndRenderer_31 != 1) {
       if(manager.params_10.flags_00 >= 0) {

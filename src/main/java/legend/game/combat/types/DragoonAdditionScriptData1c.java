@@ -7,6 +7,8 @@ import org.joml.Vector3f;
 public class DragoonAdditionScriptData1c implements ScriptedObject {
   public int unused_00;
   public int baseAngle_02;
+  /** Not retail - {@link #baseAngle_02} on the previous logic tick so the spinner can be interpolated */
+  public int lastBaseAngle;
   public int currentTick_04;
   public int unused_05;
   public int stepCountIndex_06;

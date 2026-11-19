@@ -6,6 +6,7 @@ import legend.game.scripting.ScriptState;
 import legend.core.renderer.Translucency;
 
 import static legend.core.GameEngine.RENDERER;
+import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.FullScreenEffects.fullScreenEffect_800bb140;
 import static legend.game.Graphics.displayHeight_1f8003e4;
 
@@ -17,6 +18,8 @@ public class FullScreenOverlayEffect0e implements Effect<EffectManagerParams.Voi
   private final short stepG_08;
   private final short stepB_0a;
   private int ticksRemaining_0c;
+  /** Whether the colour stepped on the latest logic tick, for display interpolation */
+  private boolean stepped;
 
   public FullScreenOverlayEffect0e(final int r, final int g, final int b, final int fullR, final int fullG, final int fullB, final int ticks) {
     this.r_00 = r;
@@ -32,6 +35,8 @@ public class FullScreenOverlayEffect0e implements Effect<EffectManagerParams.Voi
   @Method(0x800cea9cL)
   public void tick(final ScriptState<EffectManagerData6c<EffectManagerParams.VoidType>> state) {
     final EffectManagerData6c<EffectManagerParams.VoidType> manager = state.innerStruct_00;
+
+    this.stepped = this.ticksRemaining_0c != 0;
 
     if(this.ticksRemaining_0c != 0) {
       this.r_00 += this.stepR_06;
@@ -55,10 +60,16 @@ public class FullScreenOverlayEffect0e implements Effect<EffectManagerParams.Voi
       .translate(0.0f, 0.0f, 120.0f)
     ;
 
+    // Fade from the previous tick's colour to this tick's
+    final float back = this.stepped ? 1.0f - SCRIPTS.getInterpAlpha() : 0.0f;
+    final float r = this.r_00 - this.stepR_06 * back;
+    final float g = this.g_02 - this.stepG_08 * back;
+    final float b = this.b_04 - this.stepB_0a * back;
+
     //LAB_800139c4
     RENDERER.queueOrthoModel(RENDERER.opaqueQuad, fullScreenEffect_800bb140.transforms, QueuedModelStandard.class)
       .translucency(Translucency.of(manager.params_10.flags_00 >>> 28 & 0b11))
-      .colour((this.r_00 >> 8) / 255.0f, (this.g_02 >> 8) / 255.0f, (this.b_04 >> 8) / 255.0f);
+      .colour(r / 256.0f / 255.0f, g / 256.0f / 255.0f, b / 256.0f / 255.0f);
   }
 
   @Override

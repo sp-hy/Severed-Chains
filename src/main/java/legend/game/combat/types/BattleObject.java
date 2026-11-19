@@ -35,7 +35,7 @@ public abstract class BattleObject implements ScriptedObject {
 
   /** Lerp root transform toward the latest 20 Hz pose. Call from the renderer, restore afterwards. */
   public void applyVisualInterpolation() {
-    if(this.battle.tickMultiplier() <= 1) {
+    if(!SCRIPTS.hasFixedTickRate()) {
       return;
     }
 

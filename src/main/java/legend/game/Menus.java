@@ -217,7 +217,8 @@ public final class Menus {
       final UiPart[] entries = renderable.uiType_20.entries_08;
 
       if((renderable.flags_00 & Renderable58.FLAG_NO_ANIMATION) == 0) {
-        if(tickCount_800bb0fc % Math.max(1, 3 - vsyncMode_8007a3b8) == 0) {
+        // With a fixed logic rate, animate on logic ticks rather than display frames
+        if(SCRIPTS.hasFixedTickRate() ? SCRIPTS.willTick() : tickCount_800bb0fc % Math.max(1, 3 - vsyncMode_8007a3b8) == 0) {
           renderable.ticksPerFrame_08--;
         }
 

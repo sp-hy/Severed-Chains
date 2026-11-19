@@ -67,14 +67,12 @@ import static legend.core.GameEngine.RENDERER;
 import static legend.core.GameEngine.SCRIPTS;
 import static legend.game.Graphics.centreScreenX_1f8003dc;
 import static legend.game.Graphics.centreScreenY_1f8003de;
-import static legend.game.Graphics.vsyncMode_8007a3b8;
 import static legend.game.Menus.whichMenu_800bdc38;
 import static legend.game.SItem.UI_WHITE_CENTERED;
 import static legend.game.SItem.menuStack;
 import static legend.game.Scus94491BpeSegment_8006.battleState_8006e398;
 import static legend.game.Scus94491BpeSegment_800b.encounter;
 import static legend.game.Scus94491BpeSegment_800b.gameState_800babc8;
-import static legend.game.Scus94491BpeSegment_800b.tickCount_800bb0fc;
 import static legend.game.Text.renderText;
 import static legend.game.combat.Battle.melbuStageToMonsterNameIndices_800c6f30;
 import static legend.game.combat.bent.BattleEntity27c.FLAG_CANT_TARGET;
@@ -323,7 +321,7 @@ public class BattleHud {
 
     //LAB_800ece9c
     this.battleMenu_800c6c34.transforms.identity();
-    this.battleMenu_800c6c34.transforms.transfer.set(GPU.getOffsetX() + screenCoords.x - 8, GPU.getOffsetY() + screenCoords.y + targetArrowOffsetY_800fb188[this.logicTickCount() & 0x7], 112.0f);
+    this.battleMenu_800c6c34.transforms.transfer.set(GPU.getOffsetX() + screenCoords.x - 8, GPU.getOffsetY() + screenCoords.y + targetArrowOffsetY_800fb188[this.battle.logicTickCount() & 0x7], 112.0f);
     RENDERER.queueOrthoModel(this.battleMenu_800c6c34.menuObj, this.battleMenu_800c6c34.transforms, QueuedModelStandard.class)
       .vertices(this.battleMenu_800c6c34.targetArrowsObjOffset + colour * 4, 4)
       .translucency(Translucency.HALF_B_PLUS_HALF_F);
@@ -365,6 +363,7 @@ public class BattleHud {
       num.bentIndex_04 = -1;
       num.translucent_08 = false;
       num.shade_0c = 0x80;
+      num.lastShade_0c = 0x80;
       num.ticksRemaining_14 = -1;
       num._18 = -1;
 
@@ -425,7 +424,7 @@ public class BattleHud {
         }
       }
 
-      if(this.hudFade < 6) {
+      if(this.hudFade < 6 && SCRIPTS.willTick()) {
         this.hudFade++;
       }
 
@@ -450,10 +449,6 @@ public class BattleHud {
     this.renderActionMenu();
   }
 
-  /** Battle visual clocks that were authored against 20 Hz `tickCount`. */
-  private int logicTickCount() {
-    return tickCount_800bb0fc / Math.max(1, this.battle.tickMultiplier());
-  }
 
   @Method(0x800efd34L)
   private void drawUiElements() {
@@ -758,7 +753,7 @@ public class BattleHud {
             }
 
             //Full SP meter
-            if(sp.isFull() && (tickCount_800bb0fc & 0x1) != 0) {
+            if(sp.isFull() && (this.battle.logicTickCount() & 0x1) != 0) {
               //LAB_800f09ec
               for(int i = 0; i < 4; i++) {
                 final int offsetX = displayStats.x_00 - centreScreenX_1f8003dc;
@@ -823,7 +818,7 @@ public class BattleHud {
           final int status = targetBent.status_0e;
 
           if((status & 0xff) != 0) {
-            if((this.logicTickCount() & 0x10) != 0) {
+            if((this.battle.logicTickCount() & 0x10) != 0) {
               int mask = 0x80;
 
               //LAB_800f0e94
@@ -948,7 +943,7 @@ public class BattleHud {
       final FloatingNumberC4 num = this.floatingNumbers_800c6b5c[i];
 
       if(num.state_00 == 0) {
-        this.addFloatingNumber(i, 0, 0, number, x, y, 60 / vsyncMode_8007a3b8 * 5, 0);
+        this.addFloatingNumber(i, 0, 0, number, x, y, Battle.LOGIC_TICKS_PER_SECOND * 5, 0);
         num.xOffset = 0;
         num.yOffset = 0;
         break;
@@ -1010,6 +1005,7 @@ public class BattleHud {
     num.bentIndex_04 = -1;
     num.translucent_08 = false;
     num.shade_0c = 0x80;
+    num.lastShade_0c = 0x80;
     num._18 = -1;
     num.ticksRemaining_14 = -1;
 
@@ -1032,7 +1028,7 @@ public class BattleHud {
     num._10 = clutCol;
 
     if(clutCol == 2 && ticks == 0) {
-      ticks = 60 / vsyncMode_8007a3b8 * 2;
+      ticks = Battle.LOGIC_TICKS_PER_SECOND * 2;
     }
 
     //LAB_800f35dc
@@ -1129,6 +1125,8 @@ public class BattleHud {
     //LAB_800f3978
     for(final FloatingNumberC4 num : this.floatingNumbers_800c6b5c) {
       if((num.flags_02 & 0x8000) != 0) {
+        num.lastShade_0c = num.shade_0c;
+
         if(num.state_00 != 0) {
           //LAB_800f3ac8
           if(num.state_00 == 1) {
@@ -1194,6 +1192,7 @@ public class BattleHud {
             num.bentIndex_04 = -1;
             num.translucent_08 = false;
             num.shade_0c = 0x80;
+            num.lastShade_0c = 0x80;
             num.ticksRemaining_14 = -1;
             num._18 = -1;
 
@@ -1219,8 +1218,9 @@ public class BattleHud {
                   num.state_00 = 97;
                   num.translucent_08 = true;
                   num.shade_0c = 0x60;
+                  num.lastShade_0c = 0x60;
 
-                  final int ticksRemaining = 60 / vsyncMode_8007a3b8 / 2;
+                  final int ticksRemaining = Battle.LOGIC_TICKS_PER_SECOND / 2;
                   num.ticksRemaining_14 = ticksRemaining;
                   num._18 = 96 / ticksRemaining;
                 } else {
@@ -1269,6 +1269,8 @@ public class BattleHud {
             num.y_20 = this.clampY(screenCoords.y + centreScreenY_1f8003de);
           }
 
+          final float shade = org.joml.Math.lerp(num.lastShade_0c, num.shade_0c, alpha) / 128.0f;
+
           //LAB_800f3e80
           for(int i = 0; i < num.digits_24.length; i++) {
             final FloatingNumberDigit20 digit = num.digits_24[i];
@@ -1287,18 +1289,18 @@ public class BattleHud {
                 if(num.translucent_08) {
                   model
                     .translucency(Translucency.HALF_B_PLUS_HALF_F)
-                    .alpha(num.shade_0c / 128.0f);
+                    .alpha(shade);
                 }
                 //LAB_800f4110
 
               if(CONFIG.getConfig(DISPLAY_ELEMENT_ICON_CONFIG.get()) && i == 0) {
                 final List<ElementIcon> attackElements = this.currentAttackElements.stream().distinct().toList();
                 for(int x = 0; x < attackElements.size(); x++) {
-                  this.elementTransforms.transfer.set(digit.x_0e + num.x_1c - 18 - (16 * x), digit.y_10 + num.y_20, 0);
+                  this.elementTransforms.transfer.set(digit.x_0e + num.x_1c - 18 - (16 * x), digitY + num.y_20, 0);
                   RENDERER
                     .queueOrthoModel(this.elementIconQuad, this.elementTransforms, QueuedModelStandard.class)
                     .translucency(Translucency.HALF_B_PLUS_HALF_F)
-                    .alpha(num.shade_0c / 128.0f)
+                    .alpha(shade)
                     .useTextureAlpha()
                     .uvOffset(0, 0)
                     .texture(this.elementIcon.get(this.currentAttackElements.get(x).getRegistryId()));
@@ -1345,7 +1347,7 @@ public class BattleHud {
     Transformations.toScreenspace(new Vector3f(x, y, z), bent.model_148.coord2_14, screenCoords);
 
     //LAB_800f4394
-    this.addFloatingNumberForBent(bentIndex, 0, 2, damage, this.clampX(screenCoords.x + centreScreenX_1f8003dc), this.clampY(screenCoords.y + centreScreenY_1f8003de), 60 / vsyncMode_8007a3b8 / 4, colour);
+    this.addFloatingNumberForBent(bentIndex, 0, 2, damage, this.clampX(screenCoords.x + centreScreenX_1f8003dc), this.clampY(screenCoords.y + centreScreenY_1f8003de), Battle.LOGIC_TICKS_PER_SECOND / 4, colour);
   }
 
   private void onListClose() {
@@ -1505,6 +1507,7 @@ public class BattleHud {
 
         this.closeMenu = false;
         this.battleMenu_800c6c34.targetArrowHiding = false;
+        this.battleMenu_800c6c34.snapHighlight();
       }
 
       case 1 -> {  // Checking for input
@@ -1543,7 +1546,7 @@ public class BattleHud {
           this.battle.cameraScriptMainTableJumpIndex_800c6748 = 33;
           this.battleMenu_800c6c34.state_00 = 5;
           this.currentCameraPositionIndicesIndex_800c66b0 = this.cameraPositionIndicesIndices_800c6c30[this.currentCameraPositionIndicesIndicesIndex_800c6ba1];
-          this.battleMenu_800c6c34.cameraPositionSwitchTicksRemaining_44 = 60 / vsyncMode_8007a3b8 + 2;
+          this.battleMenu_800c6c34.cameraPositionSwitchTicksRemaining_44 = Battle.LOGIC_TICKS_PER_SECOND + 2;
           this.toggleHighlight(false);
           break;
         }
@@ -1574,6 +1577,7 @@ public class BattleHud {
           this.battleMenu_800c6c34.highlightMovementDistance_34 = 19;
           this.battleMenu_800c6c34.currentHighlightMovementStep_38 = 0;
           this.battleMenu_800c6c34.highlightX1_3c = this.battleMenu_800c6c34.x_06 - this.battleMenu_800c6c34.xShiftOffset_0a - 23;
+          this.battleMenu_800c6c34.lastHighlightX1 = this.battleMenu_800c6c34.highlightX1_3c;
           break;
         }
 
@@ -1601,6 +1605,7 @@ public class BattleHud {
           this.battleMenu_800c6c34.highlightState_02 |= 1;
           this.battleMenu_800c6c34.selectedIcon_22 = (short)(this.battleMenu_800c6c34.actions.size() - 1);
           this.battleMenu_800c6c34.highlightX1_3c = this.battleMenu_800c6c34.x_06 - this.battleMenu_800c6c34.xShiftOffset_0a + this.battleMenu_800c6c34.actions.size() * 19 - 4;
+          this.battleMenu_800c6c34.lastHighlightX1 = this.battleMenu_800c6c34.highlightX1_3c;
           this.battleMenu_800c6c34.countHighlightMovementStep_30 = 3;
           this.battleMenu_800c6c34.highlightMovementDistance_34 = -19;
           this.battleMenu_800c6c34.currentHighlightMovementStep_38 = 0;
@@ -1672,6 +1677,9 @@ public class BattleHud {
           this.battleMenu_800c6c34.highlightX0_28 = (short)(this.battleMenu_800c6c34.x_06 - this.battleMenu_800c6c34.xShiftOffset_0a + this.battleMenu_800c6c34.selectedIcon_22 * 19 - 4);
           this.battleMenu_800c6c34.highlightY_2a = (short)(this.battleMenu_800c6c34.y_08 - 22);
           this.battleMenu_800c6c34.highlightState_02 &= 0xfffe;
+
+          // The highlight teleports to the other end of the menu, don't interpolate across it
+          this.battleMenu_800c6c34.snapHighlight();
         }
       }
 
@@ -1722,7 +1730,15 @@ public class BattleHud {
 
   @Method(0x800f6b04L)
   public void renderActionMenu() {
+    // The highlight is moved by tickAndRender from the combat menu script, which runs at the logic rate after this.
+    // Remember where it was at the last logic tick so it can glide between ticks rather than jumping.
+    if(SCRIPTS.willTick()) {
+      this.battleMenu_800c6c34.snapHighlight();
+    }
+
     if(this.battleMenu_800c6c34.state_00 != 0 && (this.battleMenu_800c6c34.highlightState_02 & 0x2) != 0) {
+      final float alpha = SCRIPTS.getInterpAlpha();
+
       //LAB_800f704c
       final int variableW = this.battleMenu_800c6c34.actions.size() * 19 + 1;
       int x = this.battleMenu_800c6c34.x_06 - variableW / 2;
@@ -1779,18 +1795,19 @@ public class BattleHud {
 
       //LAB_800f6fc8
       // Draw red glow underneath selected menu item
-      this.battleMenu_800c6c34.transforms.transfer.set(this.battleMenu_800c6c34.highlightX0_28, this.battleMenu_800c6c34.highlightY_2a, 123.9f);
+      final float colour = org.joml.Math.lerp(this.battleMenu_800c6c34.lastColour, this.battleMenu_800c6c34.colour_2c, alpha);
+      this.battleMenu_800c6c34.transforms.transfer.set(org.joml.Math.lerp(this.battleMenu_800c6c34.lastHighlightX0, this.battleMenu_800c6c34.highlightX0_28, alpha), this.battleMenu_800c6c34.highlightY_2a, 123.9f);
       RENDERER.queueOrthoModel(this.battleMenu_800c6c34.menuObj, this.battleMenu_800c6c34.transforms, QueuedModelStandard.class)
         .vertices(this.battleMenu_800c6c34.highlightObjOffset, 4)
         .translucency(Translucency.B_PLUS_F)
-        .monochrome(this.battleMenu_800c6c34.colour_2c / 255.0f);
+        .monochrome(colour / 255.0f);
 
       if((this.battleMenu_800c6c34.highlightState_02 & 0x1) != 0) {
-        this.battleMenu_800c6c34.transforms.transfer.set(this.battleMenu_800c6c34.highlightX1_3c, this.battleMenu_800c6c34.highlightY_2a, 123.9f);
+        this.battleMenu_800c6c34.transforms.transfer.set(org.joml.Math.lerp(this.battleMenu_800c6c34.lastHighlightX1, this.battleMenu_800c6c34.highlightX1_3c, alpha), this.battleMenu_800c6c34.highlightY_2a, 123.9f);
         RENDERER.queueOrthoModel(this.battleMenu_800c6c34.menuObj, this.battleMenu_800c6c34.transforms, QueuedModelStandard.class)
           .vertices(this.battleMenu_800c6c34.highlightObjOffset, 4)
           .translucency(Translucency.B_PLUS_F)
-          .monochrome(Math.max(0, (0x80 - this.battleMenu_800c6c34.colour_2c) / 255.0f));
+          .monochrome(Math.max(0, (0x80 - colour) / 255.0f));
       }
 
       //LAB_800f6c48
@@ -2026,7 +2043,7 @@ public class BattleHud {
     final Vector2f screenCoords = new Vector2f();
     Transformations.toScreenspace(new Vector3f(x, y, z), bent.model_148.coord2_14, screenCoords);
 
-    this.addFloatingNumberForBent(bentIndex, 0, 2, damage, this.clampX(screenCoords.x + centreScreenX_1f8003dc), this.clampY(screenCoords.y + centreScreenY_1f8003de), xOffset, yOffset, 60 / vsyncMode_8007a3b8 / 4, 0, r, g, b);
+    this.addFloatingNumberForBent(bentIndex, 0, 2, damage, this.clampX(screenCoords.x + centreScreenX_1f8003dc), this.clampY(screenCoords.y + centreScreenY_1f8003de), xOffset, yOffset, Battle.LOGIC_TICKS_PER_SECOND / 4, 0, r, g, b);
   }
 
   public boolean addFloatingNumberForBent(final int bentIndex, final int onHitTextType, final int onHitClutCol, final int rawDamage, final float x, final float y, final int xOffset, final int yOffset, final int ticks, final int colour, final float r, final float g, final float b) {
